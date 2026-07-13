@@ -263,10 +263,7 @@ def discover_routerboards():
     except Exception:
         pass
     
-    if "192.168.2" not in subnets:
-        subnets.append("192.168.2")
-    if "192.168.88" not in subnets:
-        subnets.append("192.168.88")
+
 
     if not broadcasts:
         broadcasts = ["255.255.255.255"]
