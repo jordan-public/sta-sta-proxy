@@ -88,6 +88,38 @@ Now you can open a browser on your PC/phone and go to `http://192.168.4.1` (or t
 
 ---
 
+
+## Verified Real-World Case Study: Tasmota AP Connection & Port Forwarding
+
+An experimental Tasmota ESP8266 AP is currently used to test this configuration:
+* **SSID**: `tasmota-C0AEC0-3776`
+* **Subnet Target IP**: `192.168.4.1`
+
+### Step-by-Step Configuration Applied:
+
+1. **Station Link Configuration**:
+   The RouterBOARD's wireless client `wlan1` is set to station mode and connected directly to `tasmota-C0AEC0-3776`. A static IP of `192.168.4.10/24` is bound to `wlan1` for instant reachability.
+
+2. **Destination NAT (Dst-NAT) Port Forwarding**:
+   To allow users on the home network (`192.168.2.x`) to access the Tasmota interface (port 80) without adding complex local static routes, we mapped the port of the remote device (adding a `1000` to port `80`) to the RouterBOARD:
+   - **RouterBOARD Proxy Entry Point**: `192.168.2.199:1080`
+   - **Tasmota Target Point**: `192.168.4.1:80`
+
+3. **Active Verification**:
+   Querying the RouterBOARD proxy port from any machine on the main network:
+   ```bash
+   curl -I http://192.168.2.199:1080
+   ```
+   Yields a successful proxy response:
+   ```text
+   HTTP/1.1 302 Found
+   Content-Type: text/plain
+   Location: http://192.168.4.1
+   ...
+   ```
+
+---
+
 ## Command Line Discovery & Connection Utility
 
 Instead of logging into WebFig manually every time you switch IoT devices, we will implement a command-line utility. 

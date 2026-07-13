@@ -91,3 +91,64 @@ ssh -o StrictHostKeyChecking=no \
     "/system resource print"
 ```
 The connection was fully established and the WebFig graphical interface is completely accessible on the LAN network at `http://192.168.2.199`.
+
+
+---
+
+## 4. Connecting to Tasmota AP & Port Forwarding Configuration
+
+### Wireless Discovery of the Target Tasmota AP
+To discover surrounding APs, we executed an active wireless scan over SSH via the RouterBOARD:
+```bash
+ssh admin@192.168.2.199 "/interface wireless scan wlan1 duration=5s"
+```
+The scan successfully detected the experimental Tasmota device:
+* **SSID**: `tasmota-C0AEC0-3776`
+* **MAC Address**: `5E:CF:7F:C0:AE:C0`
+* **Signal**: `-56 dBm` (extremely strong link)
+
+### Connecting `wlan1` to Tasmota
+We set up the wireless interface `wlan1` on the RouterBOARD to connect as a Station (STA) client to the open `tasmota-C0AEC0-3776` network, configured a static IP of `192.168.4.10` to avoid dynamic allocation delays, and verified the default gateway of `192.168.4.1` on the Tasmota interface:
+```bash
+ssh admin@192.168.2.199 \
+  "/interface wireless set [find name=wlan1] ssid=\"tasmota-C0AEC0-3776\" mode=station frequency=auto; \
+   /ip address add address=192.168.4.10/24 interface=wlan1"
+```
+
+To confirm the gateway is alive and routing correctly, we initiated a ping to Tasmota (`192.168.4.1`) from the RouterBOARD:
+```bash
+ssh admin@192.168.2.199 "/ping count=3 192.168.4.1"
+```
+**Ping Output:**
+```text
+  SEQ HOST                                     SIZE TTL TIME  STATUS           
+    0 192.168.4.1                                56 255 24ms 
+    1 192.168.4.1                                56 255 38ms 
+    2 192.168.4.1                                56 255 75ms 
+    sent=3 received=3 packet-loss=0% min-rtt=24ms avg-rtt=45ms max-rtt=75ms 
+```
+The target IP `192.168.4.1` has been successfully verified!
+
+### Port Forwarding (Port 1080 -> Tasmota Port 80)
+To reach the Tasmota web interface (port 80) using the RouterBOARD IP (port 1080) from the main home network, we configured a Destination NAT (dst-nat) rule alongside Source NAT (masquerading) on the RouterBOARD:
+```bash
+ssh admin@192.168.2.199 \
+  "/ip firewall nat add chain=dstnat dst-port=1080 protocol=tcp action=dst-nat to-addresses=192.168.4.1 to-ports=80; \
+   /ip firewall nat add chain=srcnat out-interface=wlan1 action=masquerade"
+```
+
+### Access Verification
+To verify the proxy link is operational, we initiated a `curl` test from the Mac targeting the proxy port:
+```bash
+curl -I http://192.168.2.199:1080
+```
+**Successful Verification Response:**
+```text
+HTTP/1.1 302 Found
+Content-Type: text/plain
+Location: http://192.168.4.1
+Content-Length: 0
+Connection: close
+```
+This confirms that accessing `192.168.2.199:1080` transparently proxies connections to `192.168.4.1:80` through the RouterBOARD's wireless STA link!
+
