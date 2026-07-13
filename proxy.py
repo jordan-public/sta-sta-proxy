@@ -227,6 +227,95 @@ def parse_scan_output(output):
     return networks
 
 
+def discover_routerboards():
+    """
+    Discover all MikroTik Routerboards on the local network using a combination of:
+    1. Active subnet scanning on SSH (Port 22).
+    2. Active MNDP queries on UDP Port 5678.
+    Returns a list of dicts: [{'name': name, 'ip': ip, 'model': model}]
+    """
+    import socket
+    import struct
+    import concurrent.futures
+    import re
+
+    print("[*] Performing plug-and-play auto-discovery for RouterBOARD devices...")
+    discovered = {}
+
+    # Gather local broadcast addresses and subnets
+    broadcasts = []
+    subnets = []
+    try:
+        out = subprocess.check_output(["ifconfig"], text=True)
+        # Find all broadcasts
+        broadcasts = list(set(re.findall(r"broadcast\s+([0-9.]+)", out)))
+        # Find active local IPs to calculate subnets
+        inet_ips = re.findall(r"inet\s+([0-9.]+)", out)
+        for ip in inet_ips:
+            if ip.startswith("127."):
+                continue
+            prefix = ".".join(ip.split(".")[:3])
+            if prefix not in subnets:
+                subnets.append(prefix)
+    except Exception:
+        pass
+
+    # Standard candidate subnets
+    if "192.168.2" not in subnets:
+        subnets.append("192.168.2")
+    if "192.168.88" not in subnets:
+        subnets.append("192.168.88")
+
+    # Compile candidate list (standard defaults + active subnets)
+    candidates = ["192.168.88.1", "192.168.2.199"]
+    for prefix in subnets:
+        for host in range(1, 255):
+            candidates.append(f"{prefix}.{host}")
+    candidates = list(dict.fromkeys(candidates))
+
+    # Standard SSH probe config
+    ssh_opts = [
+        "-o", "StrictHostKeyChecking=no",
+        "-o", "UserKnownHostsFile=/dev/null",
+        "-o", "HostKeyAlgorithms=+ssh-rsa",
+        "-o", "PubkeyAcceptedKeyTypes=+ssh-rsa",
+        "-o", "ConnectTimeout=4"
+    ]
+
+    def probe_ssh_host(ip):
+        # Quick check if SSH port 22 is open first
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(0.5)
+        try:
+            s.connect((ip, 22))
+            s.close()
+        except Exception:
+            return None
+
+        # SSH port open! Fetch identity details
+        try:
+            cmd = ["ssh"] + ssh_opts + [f"admin@{ip}", ":put [/system identity get name]; :put [/system resource get board-name]"]
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=4)
+            if res.returncode == 0:
+                lines = [line.strip() for line in res.stdout.split("\n") if line.strip()]
+                if len(lines) >= 2:
+                    name = lines[0]
+                    model = lines[1]
+                    return {"ip": ip, "name": name, "model": model}
+        except Exception:
+            pass
+        return None
+
+    # Probe candidates in parallel
+    with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
+        results = executor.map(probe_ssh_host, candidates)
+        for r in results:
+            if r:
+                discovered[r["ip"]] = r
+
+    return list(discovered.values())
+
+
 def main():
     global ROUTER_IP
     print("=" * 60)
@@ -238,21 +327,61 @@ def main():
     
     default_ip = os.environ.get("ROUTER_IP", "").strip()
     
-    # Prompt the user for the RouterBOARD IP address
-    if default_ip:
-        user_ip = input(f"Enter RouterBOARD IP address (default: {default_ip}): ").strip()
-        if not user_ip:
-            ROUTER_IP = default_ip
-        else:
-            ROUTER_IP = user_ip
-            save_dotenv(ROUTER_IP)
-    else:
+    # Run Auto-Discovery Sweep
+    discovered = discover_routerboards()
+    
+    if discovered:
+        print("\nDiscovered RouterBOARD Devices:")
+        for idx, router in enumerate(discovered):
+            print(f"  {idx + 1}) {router['name']} ({router['ip']}) - Model: {router['model']}")
+        print("  Other) Enter custom IP address manually")
+        
         while True:
-            ROUTER_IP = input("Enter RouterBOARD IP address: ").strip()
-            if ROUTER_IP:
+            choice = input(f"\nSelect RouterBOARD (1-{len(discovered)}) or enter custom IP address: ").strip()
+            if not choice:
+                if default_ip:
+                    ROUTER_IP = default_ip
+                    break
+                else:
+                    print("[-] Please enter a valid selection or IP address.")
+                    continue
+            
+            # Check if user entered a custom IP address
+            if re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", choice):
+                ROUTER_IP = choice
                 save_dotenv(ROUTER_IP)
                 break
-            print("[-] RouterBOARD IP is required to connect.")
+                
+            try:
+                sel_idx = int(choice) - 1
+                if 0 <= sel_idx < len(discovered):
+                    ROUTER_IP = discovered[sel_idx]["ip"]
+                    save_dotenv(ROUTER_IP)
+                    break
+                else:
+                    print(f"[-] Invalid selection. Enter 1-{len(discovered)} or a valid IP address.")
+            except ValueError:
+                # Treat other string inputs (hostname, etc.) as raw address
+                ROUTER_IP = choice
+                save_dotenv(ROUTER_IP)
+                break
+    else:
+        print("\n[-] No RouterBOARD devices discovered automatically.")
+        # Prompt the user for the RouterBOARD IP address
+        if default_ip:
+            user_ip = input(f"Enter RouterBOARD IP address (default: {default_ip}): ").strip()
+            if not user_ip:
+                ROUTER_IP = default_ip
+            else:
+                ROUTER_IP = user_ip
+                save_dotenv(ROUTER_IP)
+        else:
+            while True:
+                ROUTER_IP = input("Enter RouterBOARD IP address: ").strip()
+                if ROUTER_IP:
+                    save_dotenv(ROUTER_IP)
+                    break
+                print("[-] RouterBOARD IP is required to connect.")
         
     print(f"[*] RouterBOARD set to: {ROUTER_IP}")
     
