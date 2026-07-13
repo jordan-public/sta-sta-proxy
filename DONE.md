@@ -300,9 +300,9 @@ python3 -c "$(sed -n '/# backup_restore_skill.py/,/```/p' DONE.md | sed '1d;$d')
 
 ---
 
-## 7. Interactive AP Discovery & Proxy Gateway Controller (`cli.py`)
+## 7. Interactive AP Discovery & Proxy Gateway Controller (`proxy.py`)
 
-To fully automate the workflow of discovering IoT access points and configuring port translation mappings, we have implemented an interactive command-line interface tool: **`cli.py`**.
+To fully automate the workflow of discovering IoT access points and configuring port translation mappings, we have implemented an interactive command-line interface tool: **`proxy.py`**.
 
 ### Implemented Mechanics inside the Script:
 1. **SSID Scan Discovery**: Executes `/interface wireless scan wlan1 duration=4s` on the RouterBOARD and parses the raw tabular output to extract SSID names, MAC addresses, and Signal levels (in dBm).

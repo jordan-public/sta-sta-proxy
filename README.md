@@ -122,7 +122,7 @@ An experimental Tasmota ESP8266 AP is currently used to test this configuration:
 
 ## Command Line Discovery & Connection Utility
 
-Instead of logging into WebFig manually every time you switch IoT target devices, we have implemented an interactive command-line controller: **`cli.py`**.
+Instead of logging into WebFig manually every time you switch IoT target devices, we have implemented an interactive command-line controller: **`proxy.py`**.
 
 The utility communicates directly with the RouterBOARD over SSH to orchestrate active wireless scans, select AP targets, auto-configure Layer 3 IP bindings, set up custom port translation offset mappings, and monitor the live connection.
 
@@ -130,7 +130,7 @@ The utility communicates directly with the RouterBOARD over SSH to orchestrate a
 
 1. **Run the utility** from the repository directory:
    ```bash
-   python3 cli.py
+   python3 proxy.py
    ```
 
 2. **Scan and Select**:
