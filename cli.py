@@ -114,7 +114,20 @@ def main():
         except ValueError:
             print("[-] Please enter a valid integer.")
             
-    print(f"\n[+] Selected AP: {selected_net['ssid']} ({selected_net['mac']})")
+    ssid_to_use = selected_net['ssid']
+    if "..." in ssid_to_use:
+        print(f"\n[!] Note: The SSID was abbreviated by the RouterBOARD as '{ssid_to_use}' due to terminal width.")
+        # Calculate a smart default suggestion for Tasmota if possible
+        mac_clean = selected_net['mac'].replace(":", "").replace("-", "").upper()
+        mac_last_6 = mac_clean[-6:]
+        default_suggestion = f"tasmota-{mac_last_6}-3776"
+        user_ssid = input(f"Please enter the FULL unabbreviated SSID (default: {default_suggestion}): ").strip()
+        if user_ssid:
+            ssid_to_use = user_ssid
+        else:
+            ssid_to_use = default_suggestion
+            
+    print(f"\n[+] Selected AP SSID: {ssid_to_use} ({selected_net['mac']})")
     
     # 3. Configure Port Forwarding Offset
     while True:
