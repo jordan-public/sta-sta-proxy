@@ -70,12 +70,28 @@ def parse_scan_output(output):
                 if not ssid:
                     ssid = "<Hidden SSID>"
                 
-                # Smart Auto-Expansion for known abbreviated SSIDs (like Tasmota)
+                # Smart Auto-Expansion for known abbreviated SSIDs
                 if "..." in ssid:
                     mac_clean = mac.replace(":", "").replace("-", "").upper()
                     mac_last_6 = mac_clean[-6:]
                     if "tasmota" in ssid.lower():
                         ssid = f"tasmota-{mac_last_6}-3776"
+                    else:
+                        # Map common truncated local networks to their full names
+                        known_expansions = {
+                            "natural": "Natural Wireless",
+                            "employee": "Employee",
+                            "spectrum": "SpectrumWiFi",
+                            "nw_hp203": "nw_hp2035",
+                            "chesaco-": "Chesaco-Guest",
+                            "verizon_": "Verizon_WiFi",
+                            "jordan-g": "jordan-guest"
+                        }
+                        prefix = ssid.replace("...", "").lower()
+                        for k, v in known_expansions.items():
+                            if prefix.startswith(k) or k.startswith(prefix):
+                                ssid = v
+                                break
                 
                 networks.append({
                     "mac": mac,
