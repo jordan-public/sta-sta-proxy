@@ -110,7 +110,9 @@ def main():
         "-o", "UserKnownHostsFile=/dev/null",
         "-o", "HostKeyAlgorithms=+ssh-rsa",
         "-o", "PubkeyAcceptedKeyTypes=+ssh-rsa",
-        "-o", "ConnectTimeout=5"
+        "-o", "ConnectTimeout=5",
+        "-o", "BatchMode=yes",
+        "-o", "LogLevel=ERROR"
     ]
 
     full_cmd = ["ssh"] + ssh_opts + [f"admin@{default_ip}", config_commands]

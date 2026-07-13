@@ -35,7 +35,9 @@ SSH_OPTS = [
     "-o", "UserKnownHostsFile=/dev/null",
     "-o", "HostKeyAlgorithms=+ssh-rsa",
     "-o", "PubkeyAcceptedKeyTypes=+ssh-rsa",
-    "-o", "ConnectTimeout=5"
+    "-o", "ConnectTimeout=5",
+    "-o", "BatchMode=yes",
+    "-o", "LogLevel=ERROR"
 ]
 
 def run_ssh_cmd(cmd):
@@ -279,7 +281,9 @@ def discover_routerboards():
         "-o", "UserKnownHostsFile=/dev/null",
         "-o", "HostKeyAlgorithms=+ssh-rsa",
         "-o", "PubkeyAcceptedKeyTypes=+ssh-rsa",
-        "-o", "ConnectTimeout=4"
+        "-o", "ConnectTimeout=4",
+    "-o", "BatchMode=yes",
+    "-o", "LogLevel=ERROR"
     ]
 
     def probe_ssh_host(ip):
