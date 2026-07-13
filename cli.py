@@ -46,8 +46,78 @@ def run_ssh_cmd(cmd):
         raise RuntimeError(f"RouterBOARD SSH command failed: {res.stderr.strip()}")
     return res.stdout
 
+# Static Route configuration tracking
+ADDED_ROUTE_SUBNET = None
+ADDED_ROUTE_GW = None
+
+def add_local_route(subnet_prefix, router_ip):
+    """Add a static route on the local computer to access the target AP directly."""
+    global ADDED_ROUTE_SUBNET, ADDED_ROUTE_GW
+    subnet = f"{subnet_prefix}.0/24"
+    
+    help_text = (
+        "\n--- Static Subnet Routing Help ---\n"
+        "Some devices (like Tasmota) send an HTTP redirect to their native IP (e.g. 192.168.4.1) on login.\n"
+        "If you do not route traffic, your web browser will try to reach 192.168.4.1 directly over your WiFi\n"
+        "network instead of the RouterBOARD, causing connection timeouts.\n\n"
+        f"By choosing [Y], we add a temporary routing rule to your Mac:\n"
+        f"  sudo route -n add {subnet} {router_ip}\n"
+        "This routes all 192.168.4.x traffic through the RouterBOARD so redirects and web pages load perfectly!\n"
+        "The route is automatically deleted when you stop the proxy (Ctrl+C).\n"
+        "----------------------------------\n"
+    )
+    
+    while True:
+        choice = input(f"\nDo you want to configure a temporary routing rule to resolve HTTP redirects? [Y/n/h] (default: Y): ").strip().lower()
+        if not choice:
+            choice = "y"
+            
+        if choice == "h":
+            print(help_text)
+            continue
+        elif choice == "n":
+            print("[*] Skipping automatic static route configuration.")
+            return
+        elif choice == "y":
+            break
+        else:
+            print("[-] Invalid input. Please enter 'y', 'n', or 'h'.")
+
+    print(f"\n[*] Configuring static routing rule on your Mac...")
+    print(f"    Subnet: {subnet} -> Gateway: {router_ip}")
+    print("[!] Admin password may be prompted by 'sudo' to update macOS routing tables.")
+    
+    # Check if a route already exists and delete it first to prevent duplicates
+    subprocess.run(["sudo", "route", "-n", "delete", subnet], capture_output=True)
+    
+    cmd = ["sudo", "route", "-n", "add", subnet, router_ip]
+    res = subprocess.run(cmd)
+    if res.returncode == 0:
+        ADDED_ROUTE_SUBNET = subnet
+        ADDED_ROUTE_GW = router_ip
+        print(f"[+] Local route added successfully: {subnet} -> {router_ip}")
+    else:
+        print("[-] Failed to configure local static route. You can configure it manually using:")
+        print(f"    sudo route -n add {subnet} {router_ip}")
+
+def remove_local_route():
+    """Clean up the local computer static route."""
+    global ADDED_ROUTE_SUBNET, ADDED_ROUTE_GW
+    if ADDED_ROUTE_SUBNET and ADDED_ROUTE_GW:
+        print(f"[*] Restoring your Mac's routing table (deleting {ADDED_ROUTE_SUBNET})...")
+        cmd = ["sudo", "route", "-n", "delete", ADDED_ROUTE_SUBNET]
+        res = subprocess.run(cmd, capture_output=True)
+        if res.returncode == 0:
+            print("[+] Mac routing table restored successfully.")
+        ADDED_ROUTE_SUBNET = None
+        ADDED_ROUTE_GW = None
+
 def clean_routerboard_rules():
-    """Clean up any custom NAT rules and wlan1 configurations."""
+    """Clean up any custom NAT rules, wlan1 configurations, and local routes."""
+    # 1. Clean up local static route
+    remove_local_route()
+    
+    # 2. Clean up RouterBOARD configurations
     print("\n[*] Cleaning up RouterBOARD proxy rules...")
     try:
         # Remove any NAT rules that use dst-port matching our forwarded port or masquerade on wlan1
@@ -225,7 +295,7 @@ def main():
             print("[-] Please enter a valid integer.")
 
     # Connect to Selected SSID immediately to run DHCP discovery
-    print(f"\n[*] Connecting wlan1 to SSID \"{ssid_to_use}\"...")
+    print(f"\n[*] Connecting wlan1 to SSID \"{ssid_to_use}\"... ")
     try:
         run_ssh_cmd(f"/interface wireless set [find name=wlan1] ssid=\"{ssid_to_use}\" mode=station frequency=auto")
     except Exception as e:
@@ -278,19 +348,8 @@ def main():
     if ip_override:
         target_ap_ip = ip_override
         
-    # Check if proxy.local resolves to ROUTER_IP
-    proxy_resolves = False
-    try:
-        if socket.gethostbyname("proxy.local") == ROUTER_IP:
-            proxy_resolves = True
-    except socket.gaierror:
-        pass
-
     print(f"\n[*] Proxy configuration summary:")
-    if proxy_resolves:
-        print(f"    - Proxy Entry Point: http://proxy.local:{forwarded_port}")
-    else:
-        print(f"    - Proxy Entry Point: http://{ROUTER_IP}:{forwarded_port} (or http://proxy.local:{forwarded_port})")
+    print(f"    - Proxy Entry Point: http://{ROUTER_IP}:{forwarded_port}")
     print(f"    - Proxy Target Point: http://{target_ap_ip}:{target_port}")
     
     # 4. Apply Configurations to the RouterBOARD
@@ -301,7 +360,7 @@ def main():
         run_ssh_cmd("/ip firewall nat remove [find comment=\"sta-proxy-masquerade\"]")
         
         # Connect to Selected SSID
-        print(f"[*] Connecting wlan1 to SSID \"{selected_net['ssid']}\"...")
+        print(f"[*] Connecting wlan1 to SSID \"{selected_net['ssid']}\"... ")
         run_ssh_cmd(f"/interface wireless set [find name=wlan1] ssid=\"{selected_net['ssid']}\" mode=station frequency=auto")
         
         # Configure Static IP for local subnet (assuming target_ap_ip is on a /24 subnet, let's use .10)
@@ -312,8 +371,11 @@ def main():
         run_ssh_cmd(f"/ip address remove [find interface=wlan1 and address=\"{static_client_ip}/24\"]")
         run_ssh_cmd(f"/ip address add address={static_client_ip}/24 interface=wlan1")
         
+        # Add dynamic local static route if user selected [Y] at the prompt
+        add_local_route(subnet_prefix, ROUTER_IP)
+        
         # Configure NAT Port Forwarding Rules
-        print(f"[*] Creating dstnat port-forwarding rule ({ROUTER_IP}:{forwarded_port} -> {target_ap_ip}:{target_port})...) (Mapped to proxy.local)")
+        print(f"[*] Creating dstnat port-forwarding rule ({ROUTER_IP}:{forwarded_port} -> {target_ap_ip}:{target_port})... ")
         run_ssh_cmd(f"/ip firewall nat add chain=dstnat dst-port={forwarded_port} protocol=tcp action=dst-nat to-addresses={target_ap_ip} to-ports={target_port} comment=\"sta-proxy-forward\"")
         run_ssh_cmd(f"/ip firewall nat add chain=srcnat out-interface=wlan1 action=masquerade comment=\"sta-proxy-masquerade\"")
         
@@ -325,11 +387,7 @@ def main():
     # 5. Monitoring Loop
     print("\n" + "=" * 60)
     print(f" [+] PROXY GATEWAY IS LIVE AND ACTIVE!")
-    print(f"     Primary URL: http://proxy.local:{forwarded_port}")
-    print(f"     Backup URL:  http://{ROUTER_IP}:{forwarded_port}")
-    if not proxy_resolves:
-        print("\n [!] To make http://proxy.local work on your Mac, run:")
-        print(f"     echo '{ROUTER_IP} proxy.local' | sudo tee -a /etc/hosts")
+    print(f"     Proxy URL: http://{ROUTER_IP}:{forwarded_port}")
     print("=" * 60)
     print("Press Ctrl+C to disconnect and stop the proxy.")
     
@@ -349,15 +407,10 @@ def main():
                 pass
             time.sleep(2)
     except KeyboardInterrupt:
-        print("\n\n[!] Interrupt received.")
+        print("\n[!] Interrupt received.")
     finally:
         clean_routerboard_rules()
-        print("\n[+] Exited cleanly. Goodbye!")
+        print("\n[+] Stopped proxy controller cleanly. Goodbye!")
 
-if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        print(f"\n[-] Fatal error: {e}")
-        sys.exit(1)
-
+if __name__ == '__main__':
+    main()
