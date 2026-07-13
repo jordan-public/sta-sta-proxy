@@ -8,8 +8,20 @@ import os
 import subprocess
 import re
 import time
+import socket
 
-ROUTER_IP = "192.168.2.199"
+def detect_router_ip():
+    """Dynamically find the active RouterBOARD IP address."""
+    candidates = ["192.168.2.199", "192.168.88.1"]
+    for ip in candidates:
+        # Ping with 1 packet, timeout of 1 second
+        res = subprocess.run(["ping", "-c", "1", "-t", "1", ip], capture_output=True)
+        if res.returncode == 0:
+            return ip
+    # Fallback to default if none respond to ping
+    return "192.168.2.199"
+
+ROUTER_IP = detect_router_ip()
 SSH_OPTS = [
     "-o", "StrictHostKeyChecking=no",
     "-o", "UserKnownHostsFile=/dev/null",
@@ -187,8 +199,19 @@ def main():
     if ip_override:
         target_ap_ip = ip_override
         
+    # Check if proxy.local resolves to ROUTER_IP
+    proxy_resolves = False
+    try:
+        if socket.gethostbyname("proxy.local") == ROUTER_IP:
+            proxy_resolves = True
+    except socket.gaierror:
+        pass
+
     print(f"\n[*] Proxy configuration summary:")
-    print(f"    - Proxy Entry Point: http://{ROUTER_IP}:{forwarded_port}")
+    if proxy_resolves:
+        print(f"    - Proxy Entry Point: http://proxy.local:{forwarded_port}")
+    else:
+        print(f"    - Proxy Entry Point: http://{ROUTER_IP}:{forwarded_port} (or http://proxy.local:{forwarded_port})")
     print(f"    - Proxy Target Point: http://{target_ap_ip}:{target_port}")
     
     # 4. Apply Configurations to the RouterBOARD
@@ -211,7 +234,7 @@ def main():
         run_ssh_cmd(f"/ip address add address={static_client_ip}/24 interface=wlan1")
         
         # Configure NAT Port Forwarding Rules
-        print(f"[*] Creating dstnat port-forwarding rule ({ROUTER_IP}:{forwarded_port} -> {target_ap_ip}:{target_port})...")
+        print(f"[*] Creating dstnat port-forwarding rule ({ROUTER_IP}:{forwarded_port} -> {target_ap_ip}:{target_port})...) (Mapped to proxy.local)")
         run_ssh_cmd(f"/ip firewall nat add chain=dstnat dst-port={forwarded_port} protocol=tcp action=dst-nat to-addresses={target_ap_ip} to-ports={target_port} comment=\"sta-proxy-forward\"")
         run_ssh_cmd(f"/ip firewall nat add chain=srcnat out-interface=wlan1 action=masquerade comment=\"sta-proxy-masquerade\"")
         
@@ -223,7 +246,11 @@ def main():
     # 5. Monitoring Loop
     print("\n" + "=" * 60)
     print(f" [+] PROXY GATEWAY IS LIVE AND ACTIVE!")
-    print(f"     Access in your web browser: http://{ROUTER_IP}:{forwarded_port}")
+    print(f"     Primary URL: http://proxy.local:{forwarded_port}")
+    print(f"     Backup URL:  http://{ROUTER_IP}:{forwarded_port}")
+    if not proxy_resolves:
+        print("\n [!] To make http://proxy.local work on your Mac, run:")
+        print(f"     echo '{ROUTER_IP} proxy.local' | sudo tee -a /etc/hosts")
     print("=" * 60)
     print("Press Ctrl+C to disconnect and stop the proxy.")
     
