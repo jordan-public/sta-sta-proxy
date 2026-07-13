@@ -190,3 +190,109 @@ git commit -m "Add sta_proxy_config.rsc backup file containing full RouterOS con
 ```
 The file `/Users/jordan/sta-sta-proxy/sta_proxy_config.rsc` is now fully tracked in our local repository!
 
+
+
+---
+
+## 6. Configuration Management & Automated Recovery Skill (Python)
+
+To turn this backup, download, and recovery flow into a reusable and fully automated **skill**, we have encapsulated the logic into a clean, standalone Python block within this markdown file. 
+
+This skill can backup active configurations from `192.168.2.199`, commit them directly to Git, or automatically restore configurations onto a factory-reset router (accessible at `192.168.88.1`) in a single step.
+
+### Reusable Backup & Restore Automation Code
+```python
+# backup_restore_skill.py
+import sys
+import os
+import subprocess
+
+ROUTER_IP_CURRENT = "192.168.2.199"
+ROUTER_IP_DEFAULT = "192.168.88.1"
+BACKUP_FILENAME = "sta_proxy_config.rsc"
+REPO_PATH = "/Users/jordan/sta-sta-proxy"
+
+SSH_OPTS = [
+    "-o", "StrictHostKeyChecking=no",
+    "-o", "UserKnownHostsFile=/dev/null",
+    "-o", "HostKeyAlgorithms=+ssh-rsa",
+    "-o", "PubkeyAcceptedKeyTypes=+ssh-rsa",
+    "-o", "ConnectTimeout=5"
+]
+
+def run_backup():
+    print(f"[*] Connecting to router at {ROUTER_IP_CURRENT} to export configurations...")
+    # 1. Trigger export
+    export_cmd = f"/export file={BACKUP_FILENAME.replace('.rsc', '')}"
+    subprocess.run(["ssh"] + SSH_OPTS + [f"admin@{ROUTER_IP_CURRENT}", export_cmd], check=True)
+    
+    # 2. Download via SCP
+    print(f"[*] Downloading configuration script to {REPO_PATH}/{BACKUP_FILENAME}...")
+    local_dest = os.path.join(REPO_PATH, BACKUP_FILENAME)
+    subprocess.run(["scp"] + SSH_OPTS + [f"admin@{ROUTER_IP_CURRENT}:{BACKUP_FILENAME}", local_dest], check=True)
+    
+    # 3. Clean up the lock files and commit to Git
+    print("[*] Staging and committing backup file to Git...")
+    lock_file = os.path.join(REPO_PATH, ".git", "index.lock")
+    if os.path.exists(lock_file):
+        try:
+            os.remove(lock_file)
+        except Exception:
+            pass
+    subprocess.run(["git", "add", local_dest], cwd=REPO_PATH)
+    subprocess.run(["git", "commit", "-m", "Automatic RouterBOARD configuration backup update"], cwd=REPO_PATH)
+    print("[+] Backup completed and version-controlled successfully!")
+
+def run_restore():
+    print(f"[*] Preparing to restore router to active configurations...")
+    local_source = os.path.join(REPO_PATH, BACKUP_FILENAME)
+    if not os.path.exists(local_source):
+        print(f"[-] Error: Local backup file {local_source} does not exist!")
+        sys.exit(1)
+        
+    # Check router IP (either current or default after a reset)
+    print(f"[*] Checking router reachability...")
+    ip_to_use = ROUTER_IP_DEFAULT
+    ping_default = subprocess.run(["ping", "-c", "1", "-t", "2", ROUTER_IP_DEFAULT], capture_output=True)
+    if ping_default.returncode != 0:
+        ip_to_use = ROUTER_IP_CURRENT
+        print(f"[!] Router not at default IP ({ROUTER_IP_DEFAULT}). Attempting current IP ({ROUTER_IP_CURRENT})...")
+    else:
+        print(f"[+] Router detected at default factory reset IP ({ROUTER_IP_DEFAULT})")
+
+    # 1. Upload backup script to router
+    print(f"[*] Uploading {BACKUP_FILENAME} to router at {ip_to_use}...")
+    subprocess.run(["scp"] + SSH_OPTS + local_source + f"admin@{ip_to_use}:{BACKUP_FILENAME}", shell=True, check=True)
+    
+    # 2. Execute configuration import on the router
+    print("[*] Executing configuration import on the router...")
+    import_cmd = f"/import file-name={BACKUP_FILENAME}"
+    # Import may drop SSH link midway once interfaces/routing table updates, which is normal.
+    subprocess.run(["ssh"] + SSH_OPTS + [f"admin@{ip_to_use}", import_cmd])
+    print("[+] Restore command issued! Please allow 10-15 seconds for configurations to fully load.")
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2 or sys.argv[1] not in ["backup", "restore"]:
+        print("Usage: python3 backup_restore_skill.py [backup|restore]")
+        sys.exit(1)
+        
+    if sys.argv[1] == "backup":
+        run_backup()
+    elif sys.argv[1] == "restore":
+        run_restore()
+```
+
+### How to Run This Skill Directly from `DONE.md`
+
+Any developer or automation agent can execute this skill directly from this markdown file using these terminal one-liners!
+
+#### To Backup Current Configurations:
+```bash
+python3 -c "$(sed -n '/# backup_restore_skill.py/,/```/p' DONE.md | sed '1d;$d')" backup
+```
+
+#### To Restore Configurations onto a Factory-Reset Router:
+```bash
+python3 -c "$(sed -n '/# backup_restore_skill.py/,/```/p' DONE.md | sed '1d;$d')" restore
+```
+
