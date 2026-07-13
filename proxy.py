@@ -290,7 +290,11 @@ def main():
             break
             
         if not target_port_str:
-            target_port = default_dest
+            if channel_idx == 1:
+                target_port = default_dest
+            else:
+                # Hitting Enter on Channel #2+ defaults to finish (quit)
+                break
         else:
             try:
                 target_port = int(target_port_str)
