@@ -8,83 +8,31 @@ By connecting the RouterBOARD's physical `ether1` interface to your regular LAN,
 
 ## The Core Concept: Layer 3 STA Proxy Gateway
 
-```text
-                     --- SYSTEM ARCHITECTURE DIAGRAM ---
-
-  ┌────────────────────────────────────────────────────────┐
-  │       USER DEVICE (Computer / Laptop / Smartphone)     │
-  │                                                        │
-  │  - Active IP Address:  e.g. 192.168.2.50 (Home Subnet) │
-  └───────────────────────────┬────────────────────────────┘
-                              │
-                              │ (Accesses Proxy, e.g. http://192.168.2.199:1080)
-                              ▼
-  ┌────────────────────────────────────────────────────────┐
-  │              YOUR MAIN HOME LAN (192.168.2.x)          │
-  └───────────────────────────┬────────────────────────────┘
-                              │
-                              │ (Physical RJ45 Ethernet Cable)
-                              ▼
-  ┌────────────────────────────────────────────────────────┐
-  │            STA PROXY GATEWAY (MikroTik RB711)          │
-  │                                                        │
-  │  - ether1 Port IP: 192.168.2.199 (From Home DHCP)      │
-  │  - wlan1 Wireless: 192.168.4.10  (Static IP on AP)     │
-  │                                                        │
-  │  - NAT Forwarding: Dst-NAT 1080 -> 192.168.4.1:80      │
-  │  - Masquerade NAT: Src-NAT out-interface=wlan1         │
-  └───────────────────────────┬────────────────────────────┘
-                              │
-                              │ (Wireless Connection Link)
-                              ▼
-                      )))  Wireless  (((
-                              │
-                              ▼
-  ┌────────────────────────────────────────────────────────┐
-  │       TARGET AP DEVICE (e.g., Rover Tank Toy AP)       │
-  │                                                        │
-  │  - Hosts autonomous WiFi AP: "Rover-Tank-XXXX"         │
-  │  - Native Gateway IP: 192.168.4.1                      │
-  │  - Local Device Port: 80                               │
-  └────────────────────────────────────────────────────────┘
-```
-
-
-### System Flow & Sequence Diagram (Mermaid)
-
 ```mermaid
 flowchart TD
-    subgraph LAN [Your Home Network - 192.168.2.x]
-        UserDevice[User Computer / Smartphone
-IP: 192.168.2.x]
-        Switch[Home LAN Switch / Router
-IP: 192.168.2.1]
+    subgraph LAN ["Your Home Network (192.168.2.x)"]
+        UserDevice["User Device (Computer/Laptop/Phone)<br>IP: 192.168.2.50"]
+        Switch["Home LAN Switch / Router<br>IP: 192.168.2.1"]
     end
 
-    subgraph Proxy [STA Proxy Gateway - MikroTik RB711]
-        ether1[ether1 Interface
-IP: 192.168.2.199
-From Home DHCP]
-        NAT[NAT Port Forwarding
-Dst-NAT: 1080 -> 192.168.4.1:80
-Src-NAT: wlan1 Masquerade]
-        wlan1[wlan1 Interface
-IP: 192.168.4.10
-Static on AP Subnet]
+    subgraph Proxy ["STA Proxy Gateway (MikroTik RB711)"]
+        ether1["ether1 Port (Physical Cable)<br>IP: 192.168.2.199<br>(Assigned via Home DHCP)"]
+        NAT["Layer 3 Address Translations<br>Dst-NAT: 1080 -> 192.168.4.1:80<br>Src-NAT: wlan1 Masquerade"]
+        wlan1["wlan1 Port (Wireless STA)<br>IP: 192.168.4.10<br>(Static IP on AP Subnet)"]
     end
 
-    subgraph IoT [IoT Device Network - 192.168.4.x]
-        Rover[Rover Tank / Tasmota Device
-IP: 192.168.4.1
-Port: 80]
+    subgraph IoT ["IoT Device Network (192.168.4.x)"]
+        Rover["Target AP (Rover Tank Toy)<br>IP: 192.168.4.1<br>Port: 80"]
     end
 
-    UserDevice -->|HTTP GET :1080| Switch
-    Switch -->|Forward packet| ether1
+    UserDevice -->|HTTP Access :1080| Switch
+    Switch -->|Forward Packet| ether1
     ether1 --> NAT
     NAT --> wlan1
-    wlan1 -->|))) WiFi STA Link (((| Rover
+    wlan1 -->|Wireless Link| Rover
 ```
+
+### System Sequence Flow
 
 ```mermaid
 sequenceDiagram
