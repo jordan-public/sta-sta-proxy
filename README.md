@@ -122,9 +122,63 @@ An experimental Tasmota ESP8266 AP is currently used to test this configuration:
 
 ## Command Line Discovery & Connection Utility
 
-Instead of logging into WebFig manually every time you switch IoT devices, we will implement a command-line utility. 
+Instead of logging into WebFig manually every time you switch IoT target devices, we have implemented an interactive command-line controller: **`cli.py`**.
 
-### Planned Features:
-1. **Scan**: Triggers a wireless scan on the RouterBOARD's `wlan1` interface to discover surrounding AP networks.
-2. **List**: Shows the SSID, Signal Strength (RSSI), and encryption status of all discovered APs.
-3. **Connect**: Prompts the user to choose an AP from the list (and enter a password if needed). It then configures the wireless profile and IP settings on the RouterBOARD automatically in seconds.
+The utility communicates directly with the RouterBOARD over SSH to orchestrate active wireless scans, select AP targets, auto-configure Layer 3 IP bindings, set up custom port translation offset mappings, and monitor the live connection.
+
+### How to Use the CLI Utility:
+
+1. **Run the utility** from the repository directory:
+   ```bash
+   python3 cli.py
+   ```
+
+2. **Scan and Select**:
+   The script triggers a 4-second active scan on the RouterBOARD and prints a sorted table of all discovered APs:
+   ```text
+   ============================================================
+    sta-proxy-cli: RouterBOARD IoT Proxy Connection Manager
+   ============================================================
+   [*] Scanning for wireless Access Points on 192.168.2.199...
+   
+   Available WiFi Access Points:
+   #    SSID                           MAC Address          Signal    
+   --------------------------------------------------------------------
+   1    tasmota-C0AEC0-3776            5E:CF:7F:C0:AE:C0    -56 dBm
+   2    jordan                         3C:F0:83:1C:92:95    -30 dBm
+   3    Chesaco                        04:70:56:57:9C:28    -64 dBm
+   
+   Select target network (1-3): 1
+   ```
+
+3. **Configure Offset and Gateway Subnet**:
+   - **Port Offset**: Enter an offset to map the remote device's port 80. The default is `1000` (which hosts the proxy at `http://192.168.2.199:1080`). Entering `2000` will host it at `12080`, etc.
+   - **Gateway IP**: Choose the default AP gateway address of the target smart device (default: `192.168.4.1`, matching standard Tasmota / Rover Tank AP configs).
+   ```text
+   Enter port forwarding offset (default: 1000): 
+   Enter target AP gateway IP (default: 192.168.4.1): 
+   ```
+
+4. **Live Proxy Mapping**:
+   The script dynamically creates the NAT tables and goes into a real-time monitor loop, outputting the wireless link signal:
+   ```text
+   ============================================================
+    [+] PROXY GATEWAY IS LIVE AND ACTIVE!
+        Access in your web browser: http://192.168.2.199:1080
+   ============================================================
+   Press Ctrl+C to disconnect and stop the proxy.
+   [03:40:12] Link Status: Active | Signal: -56dBm
+   ```
+
+5. **Clean Termination**:
+   Simply hit **`Ctrl+C`**. The script immediately intercepts the interrupt and commands the RouterBOARD to cleanly tear down the forwarding tables, erase custom NAT mappings, and disconnect `wlan1` to preserve pristine router performance:
+   ```text
+   ^C
+   [!] Interrupt received.
+   
+   [*] Cleaning up RouterBOARD proxy rules...
+   [+] RouterBOARD rules cleaned up successfully.
+   
+   [+] Exited cleanly. Goodbye!
+   ```
+

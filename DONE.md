@@ -296,3 +296,21 @@ python3 -c "$(sed -n '/# backup_restore_skill.py/,/```/p' DONE.md | sed '1d;$d')
 python3 -c "$(sed -n '/# backup_restore_skill.py/,/```/p' DONE.md | sed '1d;$d')" restore
 ```
 
+
+
+---
+
+## 7. Interactive AP Discovery & Proxy Gateway Controller (`cli.py`)
+
+To fully automate the workflow of discovering IoT access points and configuring port translation mappings, we have implemented an interactive command-line interface tool: **`cli.py`**.
+
+### Implemented Mechanics inside the Script:
+1. **SSID Scan Discovery**: Executes `/interface wireless scan wlan1 duration=4s` on the RouterBOARD and parses the raw tabular output to extract SSID names, MAC addresses, and Signal levels (in dBm).
+2. **Interactive UI**: Prompts the user to select an AP and enter a custom port translation offset (mapping port 80 to `<80 + offset>`).
+3. **Automated Static Route Binding**: Calculates the target device's subnet and dynamically configures a static local IP on `wlan1` (e.g. `192.168.4.10/24` for Tasmota networks).
+4. **NAT Destination Injection**: Injects Destination NAT (dstnat) port forwarding and Source NAT (srcnat masquerading) comments:
+   * Comment `"sta-proxy-forward"` is used for easy identification.
+   * Comment `"sta-proxy-masquerade"` matches the outbound masquerading.
+5. **Real-time Link Monitoring**: Loops in a light monitoring state, printing live connection and signal statuses.
+6. **Clean teardown on Exit**: Intercepts `Ctrl+C` interrupt signals and automatically cleans the NAT rules and disconnects `wlan1` on the RouterBOARD, returning it to a clean operational state!
+
