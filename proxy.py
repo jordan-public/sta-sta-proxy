@@ -439,7 +439,7 @@ def main():
     # 1. Scan for APs
     print(f"[*] Scanning for wireless Access Points on {ROUTER_IP}...\")")
     try:
-        raw_scan = run_ssh_cmd("/interface wireless scan wlan1 duration=4s")
+        raw_scan = run_ssh_cmd("/interface wireless set [find name=wlan1] frequency=2412; /interface wireless scan wlan1 duration=4s")
     except Exception as e:
         print(f"[-] Error: Could not connect or initiate scan on the RouterBOARD: {e}")
         sys.exit(1)
