@@ -10,18 +10,7 @@ import re
 import time
 import socket
 
-def detect_router_ip():
-    """Dynamically find the active RouterBOARD IP address."""
-    candidates = ["192.168.2.199", "192.168.88.1"]
-    for ip in candidates:
-        # Ping with 1 packet, timeout of 1 second
-        res = subprocess.run(["ping", "-c", "1", "-t", "1", ip], capture_output=True)
-        if res.returncode == 0:
-            return ip
-    # Fallback to default if none respond to ping
-    return "192.168.2.199"
-
-ROUTER_IP = detect_router_ip()
+ROUTER_IP = None
 SSH_OPTS = [
     "-o", "StrictHostKeyChecking=no",
     "-o", "UserKnownHostsFile=/dev/null",
@@ -114,9 +103,27 @@ def parse_scan_output(output):
 
 
 def main():
+    global ROUTER_IP
     print("=" * 60)
     print(" sta-proxy-cli: RouterBOARD IoT Proxy Connection Manager")
     print("=" * 60)
+    
+    # Determine default Router IP by quick ping check
+    default_ip = "192.168.2.199"
+    for cand in ["192.168.2.199", "192.168.88.1"]:
+        res = subprocess.run(["ping", "-c", "1", "-t", "1", cand], capture_output=True)
+        if res.returncode == 0:
+            default_ip = cand
+            break
+            
+    # Ask user for active RouterBOARD IP address
+    user_ip = input(f"Enter RouterBOARD IP address (default: {default_ip}): ").strip()
+    if user_ip:
+        ROUTER_IP = user_ip
+    else:
+        ROUTER_IP = default_ip
+        
+    print(f"[*] RouterBOARD set to: {ROUTER_IP}")
     
     # 1. Scan for APs
     print(f"[*] Scanning for wireless Access Points on {ROUTER_IP}...")
