@@ -211,7 +211,7 @@ def main():
         run_ssh_cmd(f"/ip address add address={static_client_ip}/24 interface=wlan1")
         
         # Configure NAT Port Forwarding Rules
-        print(f"[*] Creating dstnat port-forwarding rule (port {forwarded_port} -> {target_ap_ip}:{target_port})...")
+        print(f"[*] Creating dstnat port-forwarding rule ({ROUTER_IP}:{forwarded_port} -> {target_ap_ip}:{target_port})...")
         run_ssh_cmd(f"/ip firewall nat add chain=dstnat dst-port={forwarded_port} protocol=tcp action=dst-nat to-addresses={target_ap_ip} to-ports={target_port} comment=\"sta-proxy-forward\"")
         run_ssh_cmd(f"/ip firewall nat add chain=srcnat out-interface=wlan1 action=masquerade comment=\"sta-proxy-masquerade\"")
         
