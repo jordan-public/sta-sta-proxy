@@ -88,13 +88,13 @@ def main():
         while True:
             res = subprocess.run(["ping", "-c", "1", "-t", "1", default_ip], capture_output=True)
             if res.returncode == 0:
-                # Clear line and print success
+                # Clear line completely and print success on a new line
                 print(f"\r[+] Success! Factory-reset RouterBOARD detected and responding on {default_ip}!      ")
                 break
             
-            # Print moving dots on same line
+            # Print moving dots on same line, padded to prevent trailing character bleed
             current_dots = dots_cycle[cycle_idx]
-            print(f"\r[{current_dots}] Checking connection to RouterBOARD ({default_ip})... (Press Ctrl+C to abort)", end="", flush=True)
+            print(f"\r[{current_dots}] Checking connection to RouterBOARD ({default_ip})... (Press Ctrl+C to abort)   ", end="", flush=True)
             cycle_idx = (cycle_idx + 1) % len(dots_cycle)
             time.sleep(1)
     except KeyboardInterrupt:
@@ -167,7 +167,7 @@ def main():
     try:
         while True:
             current_dots = dots_cycle[cycle_idx]
-            print(f"\r[{current_dots}] Scan #{attempt}... Searching for proxy-gateway on your network... ", end="", flush=True)
+            print(f"\r[{current_dots}] Scan #{attempt}... Searching for proxy-gateway on your network...     ", end="", flush=True)
             cycle_idx = (cycle_idx + 1) % len(dots_cycle)
             
             active_ips = scan_local_subnet()
@@ -190,9 +190,8 @@ def main():
                 print(f"    Device Identity: proxy-gateway")
                 break
                 
-            print(f"\n    [!] RouterBOARD not discovered yet. Ensure the Ethernet cable is securely plugged")
-            print("        into your home router/switch and that the RouterBOARD LAN LED is on.")
-            print("        Retrying... (Press Ctrl+C to abort)")
+            # Stay on the same line using \r instead of \n!
+            print(f"\r[{current_dots}] Scan #{attempt}... Searching... Not discovered yet. (Retrying)      ", end="", flush=True)
             time.sleep(2)
             attempt += 1
             
