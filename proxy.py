@@ -231,91 +231,96 @@ def parse_scan_output(output):
 
 def discover_routerboards():
     """
-    Discover all MikroTik Routerboards on the local network using a combination of:
-    1. Active subnet scanning on SSH (Port 22).
-    2. Active MNDP queries on UDP Port 5678.
-    Returns a list of dicts: [{'name': name, 'ip': ip, 'model': model}]
+    Discover all MikroTik Routerboards on the local network non-intrusively 
+    using MNDP (MikroTik Neighbor Discovery Protocol) over UDP Port 5678.
+    This replaces SSH/Port-22 scans to prevent intrusion on local network hosts.
     """
     import socket
     import struct
-    import concurrent.futures
     import re
+    import subprocess
 
-    print("[*] Performing plug-and-play auto-discovery for RouterBOARD devices...")
+    print("[*] Performing silent, non-intrusive MNDP auto-discovery (UDP Port 5678)...")
     discovered = {}
 
-    # Gather local broadcast addresses and subnets
+    # 1. Gather all active local network interface broadcast addresses
     broadcasts = []
-    subnets = []
     try:
         out = subprocess.check_output(["ifconfig"], text=True)
-        # Find all broadcasts
         broadcasts = list(set(re.findall(r"broadcast\s+([0-9.]+)", out)))
-        # Find active local IPs to calculate subnets
-        inet_ips = re.findall(r"inet\s+([0-9.]+)", out)
-        for ip in inet_ips:
-            if ip.startswith("127."):
-                continue
-            prefix = ".".join(ip.split(".")[:3])
-            if prefix not in subnets:
-                subnets.append(prefix)
     except Exception:
         pass
+    
+    # Standard fallback broadcasts
+    if "192.168.2.255" not in broadcasts:
+        broadcasts.append("192.168.2.255")
+    if "192.168.88.255" not in broadcasts:
+        broadcasts.append("192.168.88.255")
+    if "255.255.255.255" not in broadcasts:
+        broadcasts.append("255.255.255.255")
 
-    # Standard candidate subnets
-    if "192.168.2" not in subnets:
-        subnets.append("192.168.2")
-    if "192.168.88" not in subnets:
-        subnets.append("192.168.88")
+    # Create standard UDP broadcast socket
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    sock.settimeout(1.5) # Wait 1.5s for responses
 
-    # Compile candidate list (standard defaults + active subnets)
-    candidates = ["192.168.88.1", "192.168.2.199"]
-    for prefix in subnets:
-        for host in range(1, 255):
-            candidates.append(f"{prefix}.{host}")
-    candidates = list(dict.fromkeys(candidates))
-
-    # Standard SSH probe config
-    ssh_opts = [
-        "-o", "StrictHostKeyChecking=no",
-        "-o", "UserKnownHostsFile=/dev/null",
-        "-o", "HostKeyAlgorithms=+ssh-rsa",
-        "-o", "PubkeyAcceptedKeyTypes=+ssh-rsa",
-        "-o", "ConnectTimeout=4",
-    "-o", "BatchMode=yes",
-    "-o", "LogLevel=ERROR"
-    ]
-
-    def probe_ssh_host(ip):
-        # Quick check if SSH port 22 is open first
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(0.5)
+    try:
+        # Bind to standard MNDP port to catch replies
+        sock.bind(("", 5678))
+    except Exception:
         try:
-            s.connect((ip, 22))
-            s.close()
+            sock.bind(("", 0)) # Ephemeral fallback
         except Exception:
-            return None
+            return []
 
-        # SSH port open! Fetch identity details
+    # Send MNDP discovery packet to all broadcasts
+    for b in broadcasts:
         try:
-            cmd = ["ssh"] + ssh_opts + [f"admin@{ip}", ":put [/system identity get name]; :put [/system resource get board-name]"]
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=4)
-            if res.returncode == 0:
-                lines = [line.strip() for line in res.stdout.split("\n") if line.strip()]
-                if len(lines) >= 2:
-                    name = lines[0]
-                    model = lines[1]
-                    return {"ip": ip, "name": name, "model": model}
+            sock.sendto(b"\x00\x00\x00\x00", (b, 5678))
         except Exception:
             pass
-        return None
 
-    # Probe candidates in parallel
-    with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
-        results = executor.map(probe_ssh_host, candidates)
-        for r in results:
-            if r:
-                discovered[r["ip"]] = r
+    # Listen for MNDP responses
+    try:
+        while True:
+            data, addr = sock.recvfrom(2048)
+            if len(data) < 4:
+                continue
+                
+            ip = addr[0]
+            if ip in discovered:
+                continue
+
+            # Parse TLVs (Type-Length-Value)
+            idx = 4
+            name = "proxy-gateway"
+            model = "RouterBOARD"
+            while idx < len(data) - 4:
+                try:
+                    tlv_type, tlv_len = struct.unpack("!HH", data[idx:idx+4])
+                    val_bytes = data[idx+4 : idx+4+tlv_len]
+                    if tlv_len < 0 or idx + 4 + tlv_len > len(data):
+                        break
+                    
+                    if tlv_type == 5: # System Identity / Name (MNDP Type 5)
+                        name = val_bytes.decode("utf-8", errors="ignore").strip()
+                    elif tlv_type == 8: # Board Name / Model (MNDP Type 8)
+                        model = val_bytes.decode("utf-8", errors="ignore").strip()
+                    elif tlv_type == 7 and model == "RouterBOARD": # Fallback to version
+                        model = val_bytes.decode("utf-8", errors="ignore").strip()
+                        
+                    idx += 4 + tlv_len
+                except Exception:
+                    break
+
+            discovered[ip] = {"ip": ip, "name": name, "model": model}
+    except socket.timeout:
+        pass
+    except Exception:
+        pass
+    finally:
+        sock.close()
 
     return list(discovered.values())
 
