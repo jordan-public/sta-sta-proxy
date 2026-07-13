@@ -151,11 +151,16 @@ The utility communicates directly with the RouterBOARD over SSH to orchestrate a
    Select target network (1-3): 1
    ```
 
-3. **Configure Ports and Gateway Subnet**:
+3. **Dynamic AP Gateway Discovery & Port Selection**:
+   - **Connection & DHCP Discovery**: The script immediately connects `wlan1` to your selected AP and spawns a temporary, isolated DHCP client to **dynamically discover the AP's actual gateway IP address**!
    - **Destination Port**: Enter the port of the target smart device (default: `80` in brackets).
    - **Proxy Port**: Enter the entrance port of the proxy on the RouterBOARD (default: `<destination_port + 1000>` in brackets).
-   - **Gateway IP**: Choose the default AP gateway address of the target smart device (default: `192.168.4.1`).
+   - **Gateway IP**: Choose the target AP gateway IP address. The default in brackets is the **dynamically discovered IP** (falling back to `192.168.4.1` only if discovery times out!).
    ```text
+   [*] Connecting wlan1 to SSID "tasmota-C0AEC0-3776"...
+   [*] Spawning temporary DHCP client on wlan1 to discover gateway IP...
+   [+] Dynamically discovered AP gateway IP: 192.168.4.1
+   
    Enter destination port (default: 80): 
    Enter proxy port (default: 1080): 
    Enter target AP gateway IP (default: 192.168.4.1): 

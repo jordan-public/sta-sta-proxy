@@ -306,11 +306,12 @@ To fully automate the workflow of discovering IoT access points and configuring 
 
 ### Implemented Mechanics inside the Script:
 1. **SSID Scan Discovery**: Executes `/interface wireless scan wlan1 duration=4s` on the RouterBOARD and parses the raw tabular output to extract SSID names, MAC addresses, and Signal levels (in dBm).
-2. **Interactive UI**: Prompts the user to select an AP, input a target destination port (default: 80), select a custom proxy entry port (default: destination_port + 1000), and optionally override the target AP gateway IP (default: 192.168.4.1).
-3. **Automated Static Route Binding**: Calculates the target device's subnet and dynamically configures a static local IP on `wlan1` (e.g. `192.168.4.10/24` for Tasmota networks).
-4. **NAT Destination Injection**: Injects Destination NAT (dstnat) port forwarding and Source NAT (srcnat masquerading) comments:
+2. **Dynamic DHCP AP Gateway Discovery**: Immediately connects the RouterBOARD's `wlan1` interface to your chosen AP, spawns a temporary, isolated DHCP client, and polls for a lease to **dynamically discover the AP's actual gateway IP address** (falling back to `192.168.4.1` only if discovery times out).
+3. **Interactive UI**: Prompts the user to select an AP, automatically pre-fills the target AP gateway IP with the dynamically discovered IP address, and requests the destination and proxy entry ports.
+4. **Automated Static Route Binding**: Calculates the target device's subnet and dynamically configures a static local IP on `wlan1` (e.g. `192.168.4.10/24` for Tasmota networks).
+5. **NAT Destination Injection**: Injects Destination NAT (dstnat) port forwarding and Source NAT (srcnat masquerading) comments:
    * Comment `"sta-proxy-forward"` is used for easy identification.
    * Comment `"sta-proxy-masquerade"` matches the outbound masquerading.
-5. **Real-time Link Monitoring**: Loops in a light monitoring state, printing live connection and signal statuses.
-6. **Clean teardown on Exit**: Intercepts `Ctrl+C` interrupt signals and automatically cleans the NAT rules and disconnects `wlan1` on the RouterBOARD, returning it to a clean operational state!
+6. **Real-time Link Monitoring**: Loops in a light monitoring state, printing live connection and signal statuses.
+7. **Clean teardown on Exit**: Intercepts `Ctrl+C` interrupt signals and automatically cleans the NAT rules and disconnects `wlan1` on the RouterBOARD, returning it to a clean operational state!
 

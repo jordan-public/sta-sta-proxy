@@ -192,8 +192,55 @@ def main():
         except ValueError:
             print("[-] Please enter a valid integer.")
 
-    target_ap_ip = "192.168.4.1" # Standard default for Tasmota, Rover Tank, etc.
-    
+    # Connect to Selected SSID immediately to run DHCP discovery
+    print(f"\n[*] Connecting wlan1 to SSID \"{ssid_to_use}\"...")
+    try:
+        run_ssh_cmd(f"/interface wireless set [find name=wlan1] ssid=\"{ssid_to_use}\" mode=station frequency=auto")
+    except Exception as e:
+        print(f"[-] Connection error: {e}")
+        sys.exit(1)
+
+    # Discover AP Gateway IP via temporary DHCP Client
+    print("[*] Spawning temporary DHCP client on wlan1 to discover gateway IP...")
+    target_ap_ip = "192.168.4.1" # default fallback
+    try:
+        # Pre-clean any old temp clients
+        run_ssh_cmd("/ip dhcp-client remove [find comment=\"sta-proxy-temp-dhcp\"]")
+        # Add new temp DHCP client
+        run_ssh_cmd("/ip dhcp-client add interface=wlan1 disabled=no add-default-route=no comment=\"sta-proxy-temp-dhcp\"")
+        
+        # Poll for lease (up to 6 seconds)
+        discovered = False
+        for _ in range(6):
+            time.sleep(1)
+            dhcp_status = run_ssh_cmd("/ip dhcp-client print detail where comment=\"sta-proxy-temp-dhcp\"")
+            if "gateway=" in dhcp_status:
+                # Parse gateway IP
+                gw_match = re.search(r"gateway=([0-9.]+)", dhcp_status)
+                if gw_match:
+                    target_ap_ip = gw_match.group(1)
+                    print(f"[+] Dynamically discovered AP gateway IP: {target_ap_ip}")
+                    discovered = True
+                    break
+            elif "dhcp-server=" in dhcp_status:
+                # Parse dhcp-server IP
+                srv_match = re.search(r"dhcp-server=([0-9.]+)", dhcp_status)
+                if srv_match:
+                    target_ap_ip = srv_match.group(1)
+                    print(f"[+] Dynamically discovered AP gateway IP: {target_ap_ip}")
+                    discovered = True
+                    break
+        if not discovered:
+            print(f"[-] DHCP lease discovery timed out. Falling back to default: {target_ap_ip}")
+    except Exception as e:
+        print(f"[-] DHCP client discovery error: {e}. Falling back to default: {target_ap_ip}")
+    finally:
+        # Clean up the temporary DHCP client immediately so it does not interfere
+        try:
+            run_ssh_cmd("/ip dhcp-client remove [find comment=\"sta-proxy-temp-dhcp\"]")
+        except Exception:
+            pass
+
     # Prompt for Target AP IP overrides
     ip_override = input(f"Enter target AP gateway IP (default: {target_ap_ip}): ").strip()
     if ip_override:
