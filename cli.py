@@ -60,10 +60,13 @@ def add_local_route(subnet_prefix, router_ip):
         "Some devices (like Tasmota) send an HTTP redirect to their native IP (e.g. 192.168.4.1) on login.\n"
         "If you do not route traffic, your web browser will try to reach 192.168.4.1 directly over your WiFi\n"
         "network instead of the RouterBOARD, causing connection timeouts.\n\n"
+        "Modifying the routing table of your computer is a privileged system operation, so your administrator\n"
+        "password may be prompted by 'sudo'.\n\n"
+        "Don't worry, upon exit the added route will be automatically removed from your computer, leaving\n"
+        "your system clean and unmodified.\n\n"
         f"By choosing [Y], we add a temporary routing rule to your Mac:\n"
         f"  sudo route -n add {subnet} {router_ip}\n"
         "This routes all 192.168.4.x traffic through the RouterBOARD so redirects and web pages load perfectly!\n"
-        "The route is automatically deleted when you stop the proxy (Ctrl+C).\n"
         "----------------------------------\n"
     )
     
