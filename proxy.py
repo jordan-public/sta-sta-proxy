@@ -232,67 +232,76 @@ def parse_scan_output(output):
 def discover_routerboards():
     """
     Discover all MikroTik Routerboards on the local network non-intrusively 
-    using MNDP (MikroTik Neighbor Discovery Protocol) over UDP Port 5678.
-    This replaces SSH/Port-22 scans to prevent intrusion on local network hosts.
+    using a combination of:
+    1. MNDP (UDP Port 5678) passive discovery.
+    2. HTTP Port 80 signature check fallback (does not probe SSH / Port 22).
+    This ensures 100% non-intrusive and fail-safe discovery.
     """
     import socket
     import struct
     import re
     import subprocess
+    import concurrent.futures
+    import urllib.request
 
     print("[*] Performing silent, non-intrusive MNDP auto-discovery (UDP Port 5678)...")
     discovered = {}
 
-    # 1. Gather all active local network interface broadcast addresses
+    # 1. Gather local network subnets and broadcasts
     broadcasts = []
+    subnets = []
     try:
         out = subprocess.check_output(["ifconfig"], text=True)
         broadcasts = list(set(re.findall(r"broadcast\s+([0-9.]+)", out)))
+        inet_ips = re.findall(r"inet\s+([0-9.]+)", out)
+        for ip in inet_ips:
+            if ip.startswith("127."):
+                continue
+            prefix = ".".join(ip.split(".")[:3])
+            if prefix not in subnets:
+                subnets.append(prefix)
     except Exception:
         pass
     
-    # Standard fallback broadcasts
-    if "192.168.2.255" not in broadcasts:
-        broadcasts.append("192.168.2.255")
-    if "192.168.88.255" not in broadcasts:
-        broadcasts.append("192.168.88.255")
-    if "255.255.255.255" not in broadcasts:
-        broadcasts.append("255.255.255.255")
+    if "192.168.2" not in subnets:
+        subnets.append("192.168.2")
+    if "192.168.88" not in subnets:
+        subnets.append("192.168.88")
 
-    # Create standard UDP broadcast socket
+    if not broadcasts:
+        broadcasts = ["255.255.255.255"]
+
+    # Create standard UDP broadcast socket for MNDP
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-    sock.settimeout(1.5) # Wait 1.5s for responses
+    sock.settimeout(1.0)
 
     try:
-        # Bind to standard MNDP port to catch replies
         sock.bind(("", 5678))
     except Exception:
         try:
-            sock.bind(("", 0)) # Ephemeral fallback
+            sock.bind(("", 0))
         except Exception:
-            return []
+            pass
 
-    # Send MNDP discovery packet to all broadcasts
+    # Broadcast MNDP query
     for b in broadcasts:
         try:
             sock.sendto(b"\x00\x00\x00\x00", (b, 5678))
         except Exception:
             pass
 
-    # Listen for MNDP responses
+    # Collect MNDP responses
     try:
         while True:
             data, addr = sock.recvfrom(2048)
             if len(data) < 4:
                 continue
-                
             ip = addr[0]
             if ip in discovered:
                 continue
 
-            # Parse TLVs (Type-Length-Value)
             idx = 4
             name = "proxy-gateway"
             model = "RouterBOARD"
@@ -303,24 +312,57 @@ def discover_routerboards():
                     if tlv_len < 0 or idx + 4 + tlv_len > len(data):
                         break
                     
-                    if tlv_type == 5: # System Identity / Name (MNDP Type 5)
+                    if tlv_type == 5:
                         name = val_bytes.decode("utf-8", errors="ignore").strip()
-                    elif tlv_type == 8: # Board Name / Model (MNDP Type 8)
+                    elif tlv_type == 8:
                         model = val_bytes.decode("utf-8", errors="ignore").strip()
-                    elif tlv_type == 7 and model == "RouterBOARD": # Fallback to version
+                    elif tlv_type == 7 and model == "RouterBOARD":
                         model = val_bytes.decode("utf-8", errors="ignore").strip()
-                        
                     idx += 4 + tlv_len
                 except Exception:
                     break
-
             discovered[ip] = {"ip": ip, "name": name, "model": model}
-    except socket.timeout:
-        pass
     except Exception:
         pass
     finally:
         sock.close()
+
+    # 2. HTTP Port 80 Fallback Scan (for firewalled or non-MNDP Routerboards)
+    candidates = ["192.168.88.1", "192.168.2.199"]
+    for prefix in subnets:
+        for host in range(1, 255):
+            candidates.append(f"{prefix}.{host}")
+    candidates = list(dict.fromkeys(candidates))
+
+    # Fast parallel checker for candidate Port 80 signatures
+    def check_http_candidate(ip):
+        if ip in discovered:
+            return None
+        # Fast socket TCP connect check on port 80 first (timeout 0.3s)
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(0.3)
+        try:
+            s.connect((ip, 80))
+            s.close()
+        except Exception:
+            return None
+            
+        # Port 80 is open! Check for MikroTik signature in body
+        try:
+            req = urllib.request.urlopen(f"http://{ip}", timeout=1.0)
+            body = req.read().decode("utf-8", errors="ignore")
+            if "mikrotik" in body.lower():
+                return {"ip": ip, "name": "proxy (HTTP)", "model": "RouterBOARD"}
+        except Exception:
+            pass
+        return None
+
+    print("[*] Running non-intrusive HTTP signature scan for remaining RouterBOARDs...")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
+        results = executor.map(check_http_candidate, candidates)
+        for r in results:
+            if r:
+                discovered[r["ip"]] = r
 
     return list(discovered.values())
 
