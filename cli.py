@@ -70,6 +70,13 @@ def parse_scan_output(output):
                 if not ssid:
                     ssid = "<Hidden SSID>"
                 
+                # Smart Auto-Expansion for known abbreviated SSIDs (like Tasmota)
+                if "..." in ssid:
+                    mac_clean = mac.replace(":", "").replace("-", "").upper()
+                    mac_last_6 = mac_clean[-6:]
+                    if "tasmota" in ssid.lower():
+                        ssid = f"tasmota-{mac_last_6}-3776"
+                
                 networks.append({
                     "mac": mac,
                     "ssid": ssid,
