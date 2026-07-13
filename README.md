@@ -120,6 +120,33 @@ An experimental Tasmota ESP8266 AP is currently used to test this configuration:
 
 ---
 
+## Automated Factory-Reset RouterBOARD Configuration
+
+If you have a fresh, factory-reset RouterBOARD (or a device that automatically resets to factory settings on reboot), you can completely configure it as our L3 STA Proxy Gateway automatically in one step!
+
+### How to use the Configurator:
+
+1. **Connect the RouterBOARD**:
+   - Plug the RouterBOARD's LAN port directly into your computer's Ethernet port.
+   - Set your Mac's Ethernet port configuration to **DHCP** so it receives an IP address (typically `192.168.88.x`).
+   - The default factory IP of the RouterBOARD is **`192.168.88.1`** (blank admin password).
+
+2. **Run the Configurator**:
+   ```bash
+   python3 configure.py
+   ```
+   
+3. **Pristine Reconfiguration Sequence (No-Disconnection Guarantee)**:
+   - The tool automatically verifies reachability and deploys a single transactional atomic configuration block via SSH.
+   - It disables the RouterBOARD's LAN DHCP Server, registers a safe home network DHCP Client, enables remote DNS requests, and renames the system identity to `proxy-gateway`.
+   - Running this atomically ensures **zero control loss** over the router during its interface reconfigurations!
+
+4. **Network Relocation & Auto-Discovery Sweep**:
+   - The script prompts you to move the RouterBOARD's Ethernet plug directly into your active home network router/switch.
+   - It immediately runs a fast multi-host background discovery ping sweep to pinpoint the RouterBOARD's new IP address, verify its identity, and write it directly into your local `.env` file!
+
+---
+
 ## Command Line Discovery & Connection Utility
 
 Instead of logging into WebFig manually every time you switch IoT target devices, we have implemented an interactive command-line controller: **`proxy.py`**.

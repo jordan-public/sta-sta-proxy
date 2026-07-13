@@ -317,3 +317,20 @@ To fully automate the workflow of discovering IoT access points and configuring 
 8. **Real-time Link Monitoring**: Loops in a light monitoring state, printing live connection and signal statuses.
 9. **Clean teardown on Exit**: Intercepts `Ctrl+C` interrupt signals and automatically cleans the NAT rules, disconnects `wlan1` on the RouterBOARD, and **deletes the temporary static route from the local Mac**, returning both the local machine and the RouterBOARD to completely pristine states!
 
+
+
+---
+
+## 8. Automated Factory-Reset Routerboard Configurator (`configure.py`)
+
+To streamline installation on new or factory-reset devices, we have implemented an intelligent configuration utility: **`configure.py`**.
+
+### Implemented Architecture:
+1. **Prerequisite Information**: Clearly explains to the user that the computer should be set up with a factory-reset Routerboard (Tested Model: RB711-2Hn / RB711UA-2HnD) connected directly to the physical LAN port (configured with DHCP). State explicitly that the default factory IP address is `192.168.88.1` with a blank admin password.
+2. **Safe Transactional Configuration Block**: Combines all conversion tasks into a single semicolon-delimited, semicolon-spaced instruction set sent to RouterOS in a single SSH session:
+   - Disables the conflicting default DHCP Server on `ether1`
+   - Installs a dynamic DHCP Client on `ether1` (storing it with comment `"sta-proxy-wan-dhcp"`)
+   - Enables RouterOS DNS remote requests handler
+   - Sets the system identity to `"proxy-gateway"` for clear identification
+   - By running this atomically, **zero connection control is lost** over the RouterBOARD while it executes its interface reconfigurations locally!
+3. **Automated IP Discovery Sweep**: After prompting the user to move the RouterBOARD's cable directly into their home LAN, the script triggers a background multi-host ping sweep on local subnet candidate ranges, logs into matching hosts, verifies the system identity is `"proxy-gateway"`, and automatically updates the local `.env` file with the newly assigned dynamic IP!
