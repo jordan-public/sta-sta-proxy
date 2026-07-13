@@ -11,10 +11,14 @@ By connecting the RouterBOARD's physical `ether1` interface to your regular LAN,
 ```text
                      --- SYSTEM ARCHITECTURE DIAGRAM ---
 
-  [ Computer / Phone ] (e.g., IP: 192.168.2.50)
-         │
-         │ (HTTP Access to Proxy, e.g. http://192.168.2.199:1080)
-         ▼
+  ┌────────────────────────────────────────────────────────┐
+  │       USER DEVICE (Computer / Laptop / Smartphone)     │
+  │                                                        │
+  │  - Active IP Address:  e.g. 192.168.2.50 (Home Subnet) │
+  └───────────────────────────┬────────────────────────────┘
+                              │
+                              │ (Accesses Proxy, e.g. http://192.168.2.199:1080)
+                              ▼
   ┌────────────────────────────────────────────────────────┐
   │              YOUR MAIN HOME LAN (192.168.2.x)          │
   └───────────────────────────┬────────────────────────────┘
