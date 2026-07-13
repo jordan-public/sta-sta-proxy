@@ -49,6 +49,61 @@ By connecting the RouterBOARD's physical `ether1` interface to your regular LAN,
   └────────────────────────────────────────────────────────┘
 ```
 
+
+### System Flow & Sequence Diagram (Mermaid)
+
+```mermaid
+flowchart TD
+    subgraph LAN [Your Home Network - 192.168.2.x]
+        UserDevice[User Computer / Smartphone
+IP: 192.168.2.x]
+        Switch[Home LAN Switch / Router
+IP: 192.168.2.1]
+    end
+
+    subgraph Proxy [STA Proxy Gateway - MikroTik RB711]
+        ether1[ether1 Interface
+IP: 192.168.2.199
+From Home DHCP]
+        NAT[NAT Port Forwarding
+Dst-NAT: 1080 -> 192.168.4.1:80
+Src-NAT: wlan1 Masquerade]
+        wlan1[wlan1 Interface
+IP: 192.168.4.10
+Static on AP Subnet]
+    end
+
+    subgraph IoT [IoT Device Network - 192.168.4.x]
+        Rover[Rover Tank / Tasmota Device
+IP: 192.168.4.1
+Port: 80]
+    end
+
+    UserDevice -->|HTTP GET :1080| Switch
+    Switch -->|Forward packet| ether1
+    ether1 --> NAT
+    NAT --> wlan1
+    wlan1 -->|))) WiFi STA Link (((| Rover
+```
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Computer as User Computer (192.168.2.x)
+    participant Switch as Home LAN Switch/Router (192.168.2.1)
+    participant Proxy as RouterBOARD Proxy (192.168.2.199)
+    participant Target as Rover Tank / IoT Device (192.168.4.1)
+
+    Computer->>Switch: HTTP GET to 192.168.2.199:1080
+    Switch->>Proxy: Forward request to ether1 (port 1080)
+    Note over Proxy: Dst-NAT Rule: Translate dest to 192.168.4.1:80<br/>Src-NAT Rule: Masquerade source as wlan1 (192.168.4.10)
+    Proxy->>Target: Forward HTTP request over WiFi STA (wlan1)
+    Target-->>Proxy: Respond with HTTP Web Page data (port 80)
+    Note over Proxy: Un-translate NAT addresses cleanly
+    Proxy-->>Switch: Return un-translated page data
+    Switch-->>Computer: Page loads successfully in browser!
+```
+
 1. The **Smart Device** (Tasmota, Rover Tank) hosts its own configuration/control WiFi AP (often on `192.168.4.1`).
 2. The **MikroTik RouterBOARD**'s wireless interface (`wlan1`) connects to the Smart Device's AP as a client/Station (STA).
 3. The RouterBOARD's physical port (`ether1`) is connected to your **Home LAN** and obtains a local IP (e.g., `192.168.2.199`).
