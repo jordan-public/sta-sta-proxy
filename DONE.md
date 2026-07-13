@@ -357,3 +357,24 @@ We conducted a deep architectural evaluation to explore if the RouterBOARD can c
   * Use the 5 GHz radio as a client to your Home Wi-Fi, and dedicate the 2.4 GHz radio entirely to scanning and connecting to standalone IoT AP devices.
 * **Option C: Wired + Wireless STA Relay (Current Certified Standard)**:
   * Retain the current design: physical Ethernet `ether1` provides a 100% reliable, zero-latency management backhaul, while `wlan1` is entirely dedicated to connecting to experimental wireless APs.
+
+
+---
+
+## 10. Multi-Channel Simultaneous NAT Port Forwarding (Robust Robot/Toy Control)
+
+We upgraded our connection gateway to support simultaneous multi-channel proxying. This is extremely valuable for complex target devices (like **Rover Tank Toys** or smart cameras) that use separate IP sockets for command/control (e.g. port `80`) and live video streaming transfer (e.g. port `8080`).
+
+### Implemented Architecture:
+1. **Interactive Multi-Channel Collector Loop**:
+   - Replaced single-channel inputs with a sequential `Channel #X` collector loop.
+   - Accepts destination port inputs and calculates recommended proxy entry port offsets (defaulting to `<destination_port + 1000>`).
+   - Typing **`q`** or **`quit`** at the destination prompt cleanly breaks the loop and closes the channel table definition.
+2. **Parallel Destination NAT (Dst-NAT) Injection**:
+   - Loops over the customized configuration dictionary and injects multiple corresponding firewall rule definitions in parallel.
+   - Comments each rule clearly with `"sta-proxy-forward"` so that all of them can be managed as a clean, single-comment group.
+3. **Simultaneous Subnet Local Route Binds**:
+   - Keeps track of a list of added local subnets to ensure multi-channel static routes can be bound and deleted in parallel without collision.
+4. **Clean Grouped Teardown**:
+   - On `Ctrl+C` interrupt, the script commands RouterOS to cleanly delete all NAT firewall rules matching `"sta-proxy-forward"` and `"sta-proxy-masquerade"` concurrently.
+   - Automatically unbinds and deletes all temporary static subnets from the host machine concurrently, returning the environment to pristine conditions.

@@ -17,7 +17,7 @@ flowchart TD
 
     subgraph Proxy ["STA Proxy Gateway (MikroTik RB711)"]
         ether1["ether1 Port (Physical Cable)<br>IP: 192.168.2.199<br>(Assigned via Home DHCP)"]
-        NAT["Layer 3 Address Translations<br>Dst-NAT: 1080 -> 192.168.4.1:80<br>Src-NAT: wlan1 Masquerade"]
+        NAT["Layer 3 Address Translations<br>Dst-NAT: Multiple Channels (e.g. 1080->80, 9080->8080)<br>Src-NAT: wlan1 Masquerade"]
         wlan1["wlan1 Port (Wireless STA)<br>IP: 192.168.4.10<br>(Static IP on AP Subnet)"]
     end
 
@@ -221,27 +221,40 @@ ROUTER_IP=192.168.2.199
    Select target network (1-3): 1
    ```
 
-3. **Dynamic AP Gateway Discovery & Port Selection**:
+3. **Dynamic AP Gateway Discovery & Multi-Channel Port Selection**:
    - **Connection & DHCP Discovery**: The script immediately connects `wlan1` to your selected AP and spawns a temporary, isolated DHCP client to **dynamically discover the AP's actual gateway IP address**!
-   - **Destination Port**: Enter the port of the target smart device (default: `80` in brackets).
-   - **Proxy Port**: Enter the entrance port of the proxy on the RouterBOARD (default: `<destination_port + 1000>` in brackets).
+   - **Multi-Port Loops**: The utility prompts you to add proxy channels sequentially. Perfect for devices like **Rover Tank Toys** that run one port for Control/Web (e.g. `80`) and a second port for Live Video feeds (e.g. `8080`).
+   - **Adding Channels**: Simply press enter to accept default offsets, or type custom ports. Enter **`q`** or **`quit`** at the destination port prompt when you are done adding ports!
    - **Gateway IP**: Choose the target AP gateway IP address. The default in brackets is the **dynamically discovered IP** (falling back to `192.168.4.1` only if discovery times out!).
    ```text
    [*] Connecting wlan1 to SSID "tasmota-C0AEC0-3776"...
    [*] Spawning temporary DHCP client on wlan1 to discover gateway IP...
    [+] Dynamically discovered AP gateway IP: 192.168.4.1
    
-   Enter destination port (default: 80): 
-   Enter proxy port (default: 1080): 
+   --- MULTI-CHANNEL PROXY PORT CONFIGURATION ---
+   Enter the channels you wish to proxy (e.g. Port 80 for Control, Port 8080 for Video).
+   Type 'q' or 'quit' at the destination port prompt once you have finished adding channels.
+   
+   [Channel #1] Enter destination port (default: 80, or 'q' to finish): 80
+   [Channel #1] Enter proxy entry port (default: 1080): 1080
+   [+] Added Channel #1: Proxy :1080 -> Device :80
+   
+   [Channel #2] Enter destination port (default: 81, or 'q' to finish): 8080
+   [Channel #2] Enter proxy entry port (default: 9080): 9080
+   [+] Added Channel #2: Proxy :9080 -> Device :8080
+   
+   [Channel #3] Enter destination port (default: 8081, or 'q' to finish): q
+   
    Enter target AP gateway IP (default: 192.168.4.1): 
    ```
 
-4. **Live Proxy Mapping**:
-   The script dynamically creates the NAT tables and goes into a real-time monitor loop, outputting the wireless link signal:
+4. **Live Multi-Channel Proxy Mapping**:
+   The script dynamically creates the NAT tables for all requested channels in parallel, adds any matching dynamic local routes, and starts monitoring the active link signal strength in a non-blocking loop:
    ```text
    ============================================================
-    [+] PROXY GATEWAY IS LIVE AND ACTIVE!
-        Access in your web browser: http://192.168.2.199:1080
+    [+] MULTI-CHANNEL PROXY GATEWAY IS LIVE AND ACTIVE!
+        - Channel #1: http://192.168.2.199:1080 (Forwarding to port 80)
+        - Channel #2: http://192.168.2.199:9080 (Forwarding to port 8080)
    ============================================================
    Press Ctrl+C to disconnect and stop the proxy.
    [03:40:12] Link Status: Active | Signal: -56dBm

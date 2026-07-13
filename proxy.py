@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-sta-proxy-cli: Interactive AP Discovery & RouterBOARD Proxy Gateway Controller
+sta-proxy-cli: Interactive AP Discovery & RouterBOARD Multi-Channel Proxy Gateway Controller
 """
 
 import sys
@@ -46,15 +46,18 @@ def run_ssh_cmd(cmd):
         raise RuntimeError(f"RouterBOARD SSH command failed: {res.stderr.strip()}")
     return res.stdout
 
-# Static Route configuration tracking
-ADDED_ROUTE_SUBNET = None
-ADDED_ROUTE_GW = None
+# Static Routes tracking for multiple subnets
+ADDED_ROUTES = [] # List of added subnets
 
 def add_local_route(subnet_prefix, router_ip):
     """Add a static route on the local computer to access the target AP directly."""
-    global ADDED_ROUTE_SUBNET, ADDED_ROUTE_GW
+    global ADDED_ROUTES
     subnet = f"{subnet_prefix}.0/24"
     
+    # Avoid duplicate routes
+    if subnet in ADDED_ROUTES:
+        return
+
     help_text = (
         "\n--- Static Subnet Routing Help ---\n"
         "Some devices (like Tasmota) send an HTTP redirect to their native IP (e.g. 192.168.4.1) on login.\n"
@@ -71,7 +74,7 @@ def add_local_route(subnet_prefix, router_ip):
     )
     
     while True:
-        choice = input(f"\nDo you want to configure a temporary routing rule to resolve HTTP redirects? [Y/n/h] (default: Y): ").strip().lower()
+        choice = input(f"\nDo you want to configure a temporary routing rule to resolve HTTP redirects on {subnet}? [Y/n/h] (default: Y): ").strip().lower()
         if not choice:
             choice = "y"
             
@@ -96,29 +99,28 @@ def add_local_route(subnet_prefix, router_ip):
     cmd = ["sudo", "route", "-n", "add", subnet, router_ip]
     res = subprocess.run(cmd)
     if res.returncode == 0:
-        ADDED_ROUTE_SUBNET = subnet
-        ADDED_ROUTE_GW = router_ip
+        if subnet not in ADDED_ROUTES:
+            ADDED_ROUTES.append(subnet)
         print(f"[+] Local route added successfully: {subnet} -> {router_ip}")
     else:
         print("[-] Failed to configure local static route. You can configure it manually using:")
         print(f"    sudo route -n add {subnet} {router_ip}")
 
-def remove_local_route():
-    """Clean up the local computer static route."""
-    global ADDED_ROUTE_SUBNET, ADDED_ROUTE_GW
-    if ADDED_ROUTE_SUBNET and ADDED_ROUTE_GW:
-        print(f"[*] Restoring your Mac's routing table (deleting {ADDED_ROUTE_SUBNET})...")
-        cmd = ["sudo", "route", "-n", "delete", ADDED_ROUTE_SUBNET]
+def remove_local_routes():
+    """Clean up all the local computer static routes."""
+    global ADDED_ROUTES
+    for subnet in ADDED_ROUTES:
+        print(f"[*] Restoring your Mac's routing table (deleting {subnet})...")
+        cmd = ["sudo", "route", "-n", "delete", subnet]
         res = subprocess.run(cmd, capture_output=True)
         if res.returncode == 0:
-            print("[+] Mac routing table restored successfully.")
-        ADDED_ROUTE_SUBNET = None
-        ADDED_ROUTE_GW = None
+            print(f"[+] Mac routing table restored successfully for {subnet}.")
+    ADDED_ROUTES = []
 
 def clean_routerboard_rules():
     """Clean up any custom NAT rules, wlan1 configurations, and local routes."""
-    # 1. Clean up local static route
-    remove_local_route()
+    # 1. Clean up local static routes
+    remove_local_routes()
     
     # 2. Clean up RouterBOARD configurations
     print("\n[*] Cleaning up RouterBOARD proxy rules...")
@@ -151,7 +153,7 @@ def parse_scan_output(output):
             parts = line.split(mac)
             if len(parts) > 1:
                 right_side = parts[1].strip()
-                sig_match = re.search(r"-\d+", right_side)
+                sig_match = re.search(r"-\\d+", right_side)
                 sig = sig_match.group(0) if sig_match else "unknown"
                 
                 freq_match = re.search(r"\d{4}/", right_side)
@@ -197,7 +199,7 @@ def parse_scan_output(output):
 def main():
     global ROUTER_IP
     print("=" * 60)
-    print(" sta-proxy-cli: RouterBOARD IoT Proxy Connection Manager")
+    print(" sta-proxy-cli: RouterBOARD Multi-Channel Proxy Gateway")
     print("=" * 60)
     
     # Load environment variables from local .env if present
@@ -224,7 +226,7 @@ def main():
     print(f"[*] RouterBOARD set to: {ROUTER_IP}")
     
     # 1. Scan for APs
-    print(f"[*] Scanning for wireless Access Points on {ROUTER_IP}...")
+    print(f"[*] Scanning for wireless Access Points on {ROUTER_IP}...\")")
     try:
         raw_scan = run_ssh_cmd("/interface wireless scan wlan1 duration=4s")
     except Exception as e:
@@ -269,33 +271,57 @@ def main():
             
     print(f"\n[+] Selected AP SSID: {ssid_to_use} ({selected_net['mac']})")
     
-    # 3. Configure Port Forwarding
+    # 3. Configure Multi-Port Forwarding Loops
+    port_configs = []
+    print("\n--- MULTI-CHANNEL PROXY PORT CONFIGURATION ---")
+    print("Enter the channels you wish to proxy (e.g. Port 80 for Control, Port 8080 for Video).")
+    print("Type 'q' or 'quit' at the destination port prompt once you have finished adding channels.")
+    
+    channel_idx = 1
     while True:
-        target_port_str = input("Enter destination port (default: 80): ").strip()
+        # Default destination port for first channel is 80; otherwise increments from previous
+        default_dest = 80 if channel_idx == 1 else port_configs[-1]['target_port'] + 1
+        
+        target_port_str = input(f"\n[Channel #{channel_idx}] Enter destination port (default: {default_dest}, or 'q' to finish): ").strip().lower()
+        if target_port_str in ['q', 'quit']:
+            if not port_configs:
+                print("[-] You must configure at least one channel to start proxy.")
+                continue
+            break
+            
         if not target_port_str:
-            target_port = 80
-            break
-        try:
-            target_port = int(target_port_str)
-            if 0 < target_port <= 65535:
+            target_port = default_dest
+        else:
+            try:
+                target_port = int(target_port_str)
+                if not (0 < target_port <= 65535):
+                    print("[-] Invalid range. Enter a valid port (1-65535).")
+                    continue
+            except ValueError:
+                print("[-] Please enter a valid integer or 'q' to finish.")
+                continue
+                
+        # Ask for corresponding proxy entry port (default destination + 1000)
+        default_proxy = target_port + 1000
+        while True:
+            forwarded_port_str = input(f"[Channel #{channel_idx}] Enter proxy entry port (default: {default_proxy}): ").strip()
+            if not forwarded_port_str:
+                forwarded_port = default_proxy
                 break
-            print("[-] Invalid range. Enter a valid port (1-65535).")
-        except ValueError:
-            print("[-] Please enter a valid integer.")
-
-    default_proxy_port = target_port + 1000
-    while True:
-        forwarded_port_str = input(f"Enter proxy port (default: {default_proxy_port}): ").strip()
-        if not forwarded_port_str:
-            forwarded_port = default_proxy_port
-            break
-        try:
-            forwarded_port = int(forwarded_port_str)
-            if 0 < forwarded_port <= 65535:
-                break
-            print("[-] Invalid range. Enter a valid port (1-65535).")
-        except ValueError:
-            print("[-] Please enter a valid integer.")
+            try:
+                forwarded_port = int(forwarded_port_str)
+                if 0 < forwarded_port <= 65535:
+                    break
+                print("[-] Invalid range. Enter a valid port (1-65535).")
+            except ValueError:
+                print("[-] Please enter a valid integer.")
+                
+        port_configs.append({
+            'target_port': target_port,
+            'forwarded_port': forwarded_port
+        })
+        print(f"[+] Added Channel #{channel_idx}: Proxy :{forwarded_port} -> Device :{target_port}")
+        channel_idx += 1
 
     # Connect to Selected SSID immediately to run DHCP discovery
     print(f"\n[*] Connecting wlan1 to SSID \"{ssid_to_use}\"... ")
@@ -351,9 +377,9 @@ def main():
     if ip_override:
         target_ap_ip = ip_override
         
-    print(f"\n[*] Proxy configuration summary:")
-    print(f"    - Proxy Entry Point: http://{ROUTER_IP}:{forwarded_port}")
-    print(f"    - Proxy Target Point: http://{target_ap_ip}:{target_port}")
+    print(f"\n[*] Multi-Channel Proxy configuration summary:")
+    for idx, cfg in enumerate(port_configs):
+        print(f"    - Channel #{idx+1}: Entry Point http://{ROUTER_IP}:{cfg['forwarded_port']} -> Device http://{target_ap_ip}:{cfg['target_port']}")
     
     # 4. Apply Configurations to the RouterBOARD
     print("\n[*] Applying proxy gateway rules to the RouterBOARD...")
@@ -377,10 +403,13 @@ def main():
         # Add dynamic local static route if user selected [Y] at the prompt
         add_local_route(subnet_prefix, ROUTER_IP)
         
-        # Configure NAT Port Forwarding Rules
-        print(f"[*] Creating dstnat port-forwarding rule ({ROUTER_IP}:{forwarded_port} -> {target_ap_ip}:{target_port})... ")
-        run_ssh_cmd(f"/ip firewall nat add chain=dstnat dst-port={forwarded_port} protocol=tcp action=dst-nat to-addresses={target_ap_ip} to-ports={target_port} comment=\"sta-proxy-forward\"")
-        run_ssh_cmd(f"/ip firewall nat add chain=srcnat out-interface=wlan1 action=masquerade comment=\"sta-proxy-masquerade\"")
+        # Configure NAT Port Forwarding Rules for all requested channels
+        for idx, cfg in enumerate(port_configs):
+            print(f"[*] Creating dstnat port-forwarding rule #{idx+1} ({ROUTER_IP}:{cfg['forwarded_port']} -> {target_ap_ip}:{cfg['target_port']})... ")
+            run_ssh_cmd(f"/ip firewall nat add chain=dstnat dst-port={cfg['forwarded_port']} protocol=tcp action=dst-nat to-addresses={target_ap_ip} to-ports={cfg['target_port']} comment=\"sta-proxy-forward\"")
+        
+        # Add outbound masquerading NAT
+        run_ssh_cmd("/ip firewall nat add chain=srcnat out-interface=wlan1 action=masquerade comment=\"sta-proxy-masquerade\"")
         
     except Exception as e:
         print(f"[-] Configuration error: {e}")
@@ -389,8 +418,9 @@ def main():
         
     # 5. Monitoring Loop
     print("\n" + "=" * 60)
-    print(f" [+] PROXY GATEWAY IS LIVE AND ACTIVE!")
-    print(f"     Proxy URL: http://{ROUTER_IP}:{forwarded_port}")
+    print(f" [+] MULTI-CHANNEL PROXY GATEWAY IS LIVE AND ACTIVE!")
+    for idx, cfg in enumerate(port_configs):
+        print(f"     - Channel #{idx+1}: http://{ROUTER_IP}:{cfg['forwarded_port']} (Forwarding to port {cfg['target_port']})")
     print("=" * 60)
     print("Press Ctrl+C to disconnect and stop the proxy.")
     
