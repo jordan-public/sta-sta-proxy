@@ -68,15 +68,6 @@ def main():
     print("\n[!] Press Ctrl+C at any time to abort and stop the configuration process.")
     print("-" * 70)
 
-    try:
-        input("\nPress [Enter] once your computer is connected to the RouterBOARD to begin...")
-    except EOFError:
-        # Non-interactive terminal bypass
-        pass
-    except KeyboardInterrupt:
-        print("\n\n[!] Configuration aborted by user. Exiting.")
-        sys.exit(0)
-
     # Step 1: Resilient Reachability Loop with moving dots
     default_ip = "192.168.88.1"
     print(f"\n[*] Step 1: Checking reachability to factory-reset RouterBOARD at {default_ip}...")
@@ -89,12 +80,12 @@ def main():
             res = subprocess.run(["ping", "-c", "1", "-t", "1", default_ip], capture_output=True)
             if res.returncode == 0:
                 # Clear line completely and print success on a new line
-                print(f"\r[+] Success! Factory-reset RouterBOARD detected and responding on {default_ip}!      ")
+                print(f"\r[+] Success! Factory-reset RouterBOARD detected on {default_ip}!      ")
                 break
             
-            # Print moving dots on same line, padded to prevent trailing character bleed
+            # Print extremely short moving dots on same line to prevent text wrapping on small terminals
             current_dots = dots_cycle[cycle_idx]
-            print(f"\r[{current_dots}] Checking connection to RouterBOARD ({default_ip})... (Press Ctrl+C to abort)   ", end="", flush=True)
+            print(f"\r[{current_dots}] Waiting for RouterBOARD ({default_ip})...", end="", flush=True)
             cycle_idx = (cycle_idx + 1) % len(dots_cycle)
             time.sleep(1)
     except KeyboardInterrupt:
@@ -138,7 +129,7 @@ def main():
         print(f"[-] Warning: SSH connection exited with info: {e}")
         print("    Let us proceed to discovery to verify if the configurations were fully applied.")
 
-    # Step 3: Switch physical ports and run discovery wait loop
+    # Step 3: Switch physical ports and run discovery wait loop automatically
     print("\n" + "=" * 70)
     print("                      SWITCH NETWORKS NOW")
     print("=" * 70)
@@ -147,18 +138,8 @@ def main():
     print("3. Ensure your computer is connected to your regular home WiFi/LAN network.")
     print("4. Allow some seconds for the RouterBOARD to boot up and obtain an IP via DHCP.")
     print("=" * 70)
-    
-    try:
-        input("\nPress [Enter] once the RouterBOARD is plugged into your home network to start discovery...")
-    except EOFError:
-        # Non-interactive terminal bypass
-        pass
-    except KeyboardInterrupt:
-        print("\n\n[!] Configuration aborted by user. Exiting.")
-        sys.exit(0)
-
     print("\n[*] Step 3: Discovering the RouterBOARD on your home network...")
-    print("    Scanning active hosts on your subnet. Please be patient... (Press Ctrl+C to abort)")
+    print("    Scanning active hosts on your subnet automatically. Please be patient...")
 
     discovered_ip = None
     attempt = 1
@@ -167,7 +148,7 @@ def main():
     try:
         while True:
             current_dots = dots_cycle[cycle_idx]
-            print(f"\r[{current_dots}] Scan #{attempt}... Searching for proxy-gateway on your network...     ", end="", flush=True)
+            print(f"\r[{current_dots}] Scan #{attempt}... Searching for proxy-gateway...", end="", flush=True)
             cycle_idx = (cycle_idx + 1) % len(dots_cycle)
             
             active_ips = scan_local_subnet()
@@ -190,9 +171,7 @@ def main():
                 print(f"    Device Identity: proxy-gateway")
                 break
                 
-            # Stay on the same line using \r instead of \n!
-            print(f"\r[{current_dots}] Scan #{attempt}... Searching... Not discovered yet. (Retrying)      ", end="", flush=True)
-            time.sleep(2)
+            time.sleep(1)
             attempt += 1
             
     except KeyboardInterrupt:
