@@ -10,6 +10,25 @@ import re
 import time
 import socket
 
+def load_dotenv():
+    """Parse local .env file key-values into os.environ if it exists."""
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    if os.path.exists(env_path):
+        with open(env_path, "r") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if "=" in line:
+                    key, val = line.split("=", 1)
+                    os.environ[key.strip()] = val.strip()
+
+def save_dotenv(router_ip):
+    """Save ROUTER_IP into .env file permanently."""
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    with open(env_path, "w") as f:
+        f.write(f"# Local Environment Configurations\nROUTER_IP={router_ip}\n")
+
 ROUTER_IP = None
 SSH_OPTS = [
     "-o", "StrictHostKeyChecking=no",
@@ -108,20 +127,26 @@ def main():
     print(" sta-proxy-cli: RouterBOARD IoT Proxy Connection Manager")
     print("=" * 60)
     
-    # Determine default Router IP by quick ping check
-    default_ip = "192.168.2.199"
-    for cand in ["192.168.2.199", "192.168.88.1"]:
-        res = subprocess.run(["ping", "-c", "1", "-t", "1", cand], capture_output=True)
-        if res.returncode == 0:
-            default_ip = cand
-            break
-            
-    # Ask user for active RouterBOARD IP address
-    user_ip = input(f"Enter RouterBOARD IP address (default: {default_ip}): ").strip()
-    if user_ip:
-        ROUTER_IP = user_ip
+    # Load environment variables from local .env if present
+    load_dotenv()
+    
+    default_ip = os.environ.get("ROUTER_IP", "").strip()
+    
+    # Prompt the user for the RouterBOARD IP address
+    if default_ip:
+        user_ip = input(f"Enter RouterBOARD IP address (default: {default_ip}): ").strip()
+        if not user_ip:
+            ROUTER_IP = default_ip
+        else:
+            ROUTER_IP = user_ip
+            save_dotenv(ROUTER_IP)
     else:
-        ROUTER_IP = default_ip
+        while True:
+            ROUTER_IP = input("Enter RouterBOARD IP address: ").strip()
+            if ROUTER_IP:
+                save_dotenv(ROUTER_IP)
+                break
+            print("[-] RouterBOARD IP is required to connect.")
         
     print(f"[*] RouterBOARD set to: {ROUTER_IP}")
     
