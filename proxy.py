@@ -306,6 +306,12 @@ def discover_routerboards():
                 continue
             if ip in discovered:
                 continue
+                
+            # Mathematical subnet reachability check:
+            # Ensure the sender IP shares the same /24 subnet prefix as one of our active local interfaces!
+            sender_prefix = ".".join(ip.split(".")[:3])
+            if "subnets" in locals() and sender_prefix not in subnets:
+                continue
 
             idx = 4
             name = "proxy-gateway"
