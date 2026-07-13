@@ -184,6 +184,14 @@ Instead of logging into WebFig manually every time you switch IoT target devices
 
 The utility communicates directly with the RouterBOARD over SSH to orchestrate active wireless scans, select AP targets, auto-configure Layer 3 IP bindings, set up custom port translation offset mappings, and monitor the live connection.
 
+### Non-Intrusive Auto-Discovery
+
+At startup, the connection utility automatically runs an **advanced dual-engine auto-discovery scan** to search for active RouterBOARDs on your local network:
+1. **Passive MNDP (UDP Port 5678)**: It sends a standard, non-intrusive UDP broadcast to query MikroTik RouterBOARDs. No intrusive port scans or SSH attempts are performed on other devices (e.g. Linux/Mac endpoints) on your network.
+2. **HTTP Signature Scan Fallback**: If the RouterBOARD's firewall is blocking UDP port 5678, it falls back to a fast parallel HTTP Port 80 sweep, searching for the `"mikrotik"` signature header.
+3. **Smart Filters**: It automatically excludes your own computer's active interface IPs (preventing false self-detections) and discards unreachable subnets (like `192.168.88.1` when operating purely over Wi-Fi), showing you only 100% active, reachable, and compatible RouterBOARD options!
+
+
 ### Environment Configuration (`.env`)
 
 Before running the utility, copy the example environment file and set your RouterBOARD's IP address:

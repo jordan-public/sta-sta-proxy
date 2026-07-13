@@ -397,3 +397,27 @@ We enhanced the local management environment to robustly support both Linux (e.g
    - Bypasses costly local software packet sniffing by commanding the RouterBOARD (`/interface monitor-traffic wlan1 once`) to report its silicon-level hardware counters during the already established 2-second heartbeat loop.
 4. **Enhanced Channel Loop Exits**:
    - Refined the multi-channel prompt loop to allow user-friendly `'q'` or `'quit'` entries safely from any channel configuration prompt (destination port or entry port).
+
+
+
+---
+
+## 12. Silent, Non-Intrusive Dual-Engine Auto-Discovery
+
+We have completely redesigned the RouterBOARD discovery phase in `proxy.py` to be 100% silent, non-intrusive, and enterprise-safe. It eliminates port scans and SSH-probe requests on neighboring network devices.
+
+### Implemented Architecture:
+1. **Passive MNDP Engine (UDP Port 5678)**:
+   - Employs the native **MikroTik Neighbor Discovery Protocol (MNDP)** over UDP port `5678`.
+   - Sends a single lightweight broadcast query to all local network interfaces and parses incoming binary TLV frames (decoding System Identity Type `5` and Board Model Type `8`).
+   - Completely safe: other network devices (like Linux/Mac hosts on your network) do not listen on port 5678 and are **completely untouched**.
+2. **Dual-Engine HTTP Fallback**:
+   - If a RouterBOARD is connected to a firewalled port (e.g. `ether1` treated as WAN) and blocks incoming UDP 5678 or SSH, our script launches a highly targeted fallback scan.
+   - It probes only Port 80 on active candidates and checks the HTTP response body for the `"mikrotik"` signature, detecting firewalled RouterBOARDs instantly and safely.
+3. **Dynamic Self-IP Loopback Exclusion**:
+   - Automatically detects all active IP addresses on the local computer's network interfaces (via `ifconfig`).
+   - Excludes any self-IP loopback reflections from showing up as discovered RouterBOARDs in the terminal menu.
+4. **Active Subnet Reachability Filtering**:
+   - Mathematically evaluates the subnet prefix of every discovered device.
+   - Discards any discovered endpoints belonging to unreachable subnets (such as `192.168.88.x` bridging over Wi-Fi when no wired connection is active).
+   - Guarantees that only 100% route-compatible and physically reachable options are presented to the user!
