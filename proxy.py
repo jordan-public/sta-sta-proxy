@@ -334,10 +334,14 @@ def main():
                 
         # Ask for corresponding proxy entry port (default destination + 1000)
         default_proxy = target_port + 1000
+        abort_channel = False
         while True:
-            forwarded_port_str = input(f"[Channel #{channel_idx}] Enter proxy entry port (default: {default_proxy}): ").strip()
+            forwarded_port_str = input(f"[Channel #{channel_idx}] Enter proxy entry port (default: {default_proxy}, or 'q' to finish): ").strip().lower()
             if not forwarded_port_str:
                 forwarded_port = default_proxy
+                break
+            if forwarded_port_str in ['q', 'quit']:
+                abort_channel = True
                 break
             try:
                 forwarded_port = int(forwarded_port_str)
@@ -345,8 +349,14 @@ def main():
                     break
                 print("[-] Invalid range. Enter a valid port (1-65535).")
             except ValueError:
-                print("[-] Please enter a valid integer.")
+                print("[-] Please enter a valid integer or 'q' to finish.")
                 
+        if abort_channel:
+            if not port_configs:
+                print("[-] You must configure at least one channel to start proxy.")
+                continue
+            break
+
         port_configs.append({
             'target_port': target_port,
             'forwarded_port': forwarded_port
