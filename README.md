@@ -8,17 +8,41 @@ By connecting the RouterBOARD's physical `ether1` interface to your regular LAN,
 
 ## The Core Concept: Layer 3 STA Proxy Gateway
 
-```
-  [ My PC/Phone ] (Connected to Home Network)
-        │
-        ▼ (Targeting 192.168.4.1 or the AP IP)
-  [ Home Router / LAN Switch ] (192.168.2.x Subnet)
-        │
-        ▼ (Incoming via ether1)
-  [ MikroTik RouterBOARD (RB711) ] (Act as STA Gateway / Router)
-        │ (Wireless STA Mode / Connects to Smart Device)
-        ▼ (Wireless Link)
-  [ Smart Device AP ] (e.g., Tasmota, Rover Tank - 192.168.4.1)
+```text
+                     --- SYSTEM ARCHITECTURE DIAGRAM ---
+
+  [ Computer / Phone ] (e.g., IP: 192.168.2.50)
+         │
+         │ (HTTP Access to Proxy, e.g. http://192.168.2.199:1080)
+         ▼
+  ┌────────────────────────────────────────────────────────┐
+  │              YOUR MAIN HOME LAN (192.168.2.x)          │
+  └───────────────────────────┬────────────────────────────┘
+                              │
+                              │ (Physical RJ45 Ethernet Cable)
+                              ▼
+  ┌────────────────────────────────────────────────────────┐
+  │            STA PROXY GATEWAY (MikroTik RB711)          │
+  │                                                        │
+  │  - ether1 Port IP: 192.168.2.199 (From Home DHCP)      │
+  │  - wlan1 Wireless: 192.168.4.10  (Static IP on AP)     │
+  │                                                        │
+  │  - NAT Forwarding: Dst-NAT 1080 -> 192.168.4.1:80      │
+  │  - Masquerade NAT: Src-NAT out-interface=wlan1         │
+  └───────────────────────────┬────────────────────────────┘
+                              │
+                              │ (Wireless Connection Link)
+                              ▼
+                      )))  Wireless  (((
+                              │
+                              ▼
+  ┌────────────────────────────────────────────────────────┐
+  │       TARGET AP DEVICE (e.g., Rover Tank Toy AP)       │
+  │                                                        │
+  │  - Hosts autonomous WiFi AP: "Rover-Tank-XXXX"         │
+  │  - Native Gateway IP: 192.168.4.1                      │
+  │  - Local Device Port: 80                               │
+  └────────────────────────────────────────────────────────┘
 ```
 
 1. The **Smart Device** (Tasmota, Rover Tank) hosts its own configuration/control WiFi AP (often on `192.168.4.1`).
