@@ -305,13 +305,15 @@ python3 -c "$(sed -n '/# backup_restore_skill.py/,/```/p' DONE.md | sed '1d;$d')
 To fully automate the workflow of discovering IoT access points and configuring port translation mappings, we have implemented an interactive command-line interface tool: **`proxy.py`**.
 
 ### Implemented Mechanics inside the Script:
-1. **SSID Scan Discovery**: Executes `/interface wireless scan wlan1 duration=4s` on the RouterBOARD and parses the raw tabular output to extract SSID names, MAC addresses, and Signal levels (in dBm).
-2. **Dynamic DHCP AP Gateway Discovery**: Immediately connects the RouterBOARD's `wlan1` interface to your chosen AP, spawns a temporary, isolated DHCP client, and polls for a lease to **dynamically discover the AP's actual gateway IP address** (falling back to `192.168.4.1` only if discovery times out).
-3. **Interactive UI**: Prompts the user to select an AP, automatically pre-fills the target AP gateway IP with the dynamically discovered IP address, and requests the destination and proxy entry ports.
-4. **Automated Static Route Binding**: Calculates the target device's subnet and dynamically configures a static local IP on `wlan1` (e.g. `192.168.4.10/24` for Tasmota networks).
-5. **NAT Destination Injection**: Injects Destination NAT (dstnat) port forwarding and Source NAT (srcnat masquerading) comments:
+1. **Interactive .env Configuration**: Automatically loads and stores your RouterBOARD's IP address inside a secure, git-ignored `.env` file, prompting you with a smart dynamic default on startup.
+2. **SSID Scan Discovery**: Executes `/interface wireless scan wlan1 duration=4s` on the RouterBOARD and parses the raw tabular output to extract SSID names, MAC addresses, and Signal levels (in dBm).
+3. **Dynamic DHCP AP Gateway Discovery**: Immediately connects the RouterBOARD's `wlan1` interface to your chosen AP, spawns a temporary, isolated DHCP client, and polls for a lease to **dynamically discover the AP's actual gateway IP address** (falling back to `192.168.4.1` only if discovery times out).
+4. **Interactive UI & Custom Offsets**: Prompts the user to select an AP, automatically pre-fills the target AP gateway IP with the dynamically discovered IP address, and requests the destination and custom proxy entry ports.
+5. **Optional HTTP Redirect Static Subnet Route**: Prompts the user with `[Y/n/h]` (Yes/no/help) to safely add a temporary static route on their local Mac (`sudo route -n add <subnet> <ROUTER_IP>`). This resolves Tasmota's native HTTP redirects back to `192.168.4.1` seamlessly! Includes a fully interactive help text block when typing `h` explaining privilege requirements.
+6. **Automated Static Route Binding**: Calculates the target device's subnet and dynamically configures a static local IP on `wlan1` (e.g. `192.168.4.10/24` for Tasmota networks).
+7. **NAT Destination Injection**: Injects Destination NAT (dstnat) port forwarding and Source NAT (srcnat masquerading) comments:
    * Comment `"sta-proxy-forward"` is used for easy identification.
    * Comment `"sta-proxy-masquerade"` matches the outbound masquerading.
-6. **Real-time Link Monitoring**: Loops in a light monitoring state, printing live connection and signal statuses.
-7. **Clean teardown on Exit**: Intercepts `Ctrl+C` interrupt signals and automatically cleans the NAT rules and disconnects `wlan1` on the RouterBOARD, returning it to a clean operational state!
+8. **Real-time Link Monitoring**: Loops in a light monitoring state, printing live connection and signal statuses.
+9. **Clean teardown on Exit**: Intercepts `Ctrl+C` interrupt signals and automatically cleans the NAT rules, disconnects `wlan1` on the RouterBOARD, and **deletes the temporary static route from the local Mac**, returning both the local machine and the RouterBOARD to completely pristine states!
 

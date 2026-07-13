@@ -126,7 +126,19 @@ Instead of logging into WebFig manually every time you switch IoT target devices
 
 The utility communicates directly with the RouterBOARD over SSH to orchestrate active wireless scans, select AP targets, auto-configure Layer 3 IP bindings, set up custom port translation offset mappings, and monitor the live connection.
 
-### How to Use the CLI Utility:
+### Environment Configuration (`.env`)
+
+Before running the utility, copy the example environment file and set your RouterBOARD's IP address:
+```bash
+cp .env.example .env
+```
+Open `.env` and configure your RouterBOARD's active IP address:
+```env
+ROUTER_IP=192.168.2.199
+```
+*(This IP address is securely stored locally and is ignored by Git, keeping your environment portable!)*
+
+### How to Use the Connection Utility:
 
 1. **Run the utility** from the repository directory:
    ```bash
