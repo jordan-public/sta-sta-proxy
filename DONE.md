@@ -152,3 +152,41 @@ Connection: close
 ```
 This confirms that accessing `192.168.2.199:1080` transparently proxies connections to `192.168.4.1:80` through the RouterBOARD's wireless STA link!
 
+
+---
+
+## 5. Router Configuration Backup & Download Methodology
+
+To back up and version-control the active state of our RouterBOARD configurations, we executed a two-step export and extraction process:
+
+### 1. Generating Configuration Export Script on RouterBOARD
+We triggered a plaintext configuration export on the RouterBOARD using the `/export` command via SSH:
+```bash
+ssh -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile=/dev/null \
+    -o HostKeyAlgorithms=+ssh-rsa \
+    -o PubkeyAcceptedKeyTypes=+ssh-rsa \
+    admin@192.168.2.199 \
+    "/export file=sta_proxy_config"
+```
+This commands RouterOS to collect all active modifications and write them as a standard, human-readable script file named `sta_proxy_config.rsc` in the router's local flash storage.
+
+### 2. Downloading the Configuration File to the Mac Repository
+Using secure copy (`scp`) with matching legacy cryptographic options, we downloaded the script backup file directly to the local repository directory:
+```bash
+scp -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile=/dev/null \
+    -o HostKeyAlgorithms=+ssh-rsa \
+    -o PubkeyAcceptedKeyTypes=+ssh-rsa \
+    admin@192.168.2.199:sta_proxy_config.rsc \
+    /Users/jordan/sta-sta-proxy/sta_proxy_config.rsc
+```
+
+### 3. Tracking and Storing Configuration in Git
+We staged and committed the plaintext backup script to track modifications dynamically across future configuration cycles:
+```bash
+git add sta_proxy_config.rsc
+git commit -m "Add sta_proxy_config.rsc backup file containing full RouterOS configurations"
+```
+The file `/Users/jordan/sta-sta-proxy/sta_proxy_config.rsc` is now fully tracked in our local repository!
+
