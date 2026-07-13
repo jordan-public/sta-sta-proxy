@@ -378,3 +378,22 @@ We upgraded our connection gateway to support simultaneous multi-channel proxyin
 4. **Clean Grouped Teardown**:
    - On `Ctrl+C` interrupt, the script commands RouterOS to cleanly delete all NAT firewall rules matching `"sta-proxy-forward"` and `"sta-proxy-masquerade"` concurrently.
    - Automatically unbinds and deletes all temporary static subnets from the host machine concurrently, returning the environment to pristine conditions.
+
+---
+
+## 11. Cross-Platform Local Routing and Live Bandwidth Monitoring
+
+We enhanced the local management environment to robustly support both Linux (e.g., Ubuntu) and BSD-based (e.g., macOS) systems while adding low-overhead active monitoring:
+
+### Implemented Architecture:
+1. **Dynamic OS Detection & Routing**:
+   - `proxy.py` now leverages Python's `sys.platform` to identify the host operating system dynamically.
+   - For **macOS**, it executes standard BSD route commands (`sudo route -n add -net ...`).
+   - For **Linux**, it natively switches to `iproute2` commands (`sudo ip route add ... via ...`).
+2. **Sudo Password Hardening**:
+   - Instead of silently failing when the administrative cache expires, the script forcefully tests the sudo credential (`sudo -v`). If the password is mistyped, it catches the failure and prompts the user again cleanly, ensuring critical static routes are not skipped.
+3. **Zero-Overhead Live Hardware Monitoring**:
+   - Implemented real-time network activity meters (Tx and Rx bits-per-second) directly into the console.
+   - Bypasses costly local software packet sniffing by commanding the RouterBOARD (`/interface monitor-traffic wlan1 once`) to report its silicon-level hardware counters during the already established 2-second heartbeat loop.
+4. **Enhanced Channel Loop Exits**:
+   - Refined the multi-channel prompt loop to allow user-friendly `'q'` or `'quit'` entries safely from any channel configuration prompt (destination port or entry port).

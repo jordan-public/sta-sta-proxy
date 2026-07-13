@@ -58,6 +58,12 @@ def add_local_route(subnet_prefix, router_ip):
     if subnet in ADDED_ROUTES:
         return
 
+    is_mac = sys.platform == 'darwin'
+    is_linux = sys.platform.startswith('linux')
+    os_name = "Mac" if is_mac else ("Linux" if is_linux else "machine")
+    
+    route_cmd_example = f"sudo route -n add -net {subnet} {router_ip}" if is_mac else (f"sudo ip route add {subnet} via {router_ip}" if is_linux else "route add ...")
+
     help_text = (
         "\n--- Static Subnet Routing Help ---\n"
         "Some devices (like Tasmota) send an HTTP redirect to their native IP (e.g. 192.168.4.1) on login.\n"
@@ -67,8 +73,8 @@ def add_local_route(subnet_prefix, router_ip):
         "password may be prompted by 'sudo'.\n\n"
         "Don't worry, upon exit the added route will be automatically removed from your computer, leaving\n"
         "your system clean and unmodified.\n\n"
-        f"By choosing [Y], we add a temporary routing rule to your Mac:\n"
-        f"  sudo route -n add {subnet} {router_ip}\n"
+        f"By choosing [Y], we add a temporary routing rule to your {os_name}:\n"
+        f"  {route_cmd_example}\n"
         "This routes all 192.168.4.x traffic through the RouterBOARD so redirects and web pages load perfectly!\n"
         "----------------------------------\n"
     )
@@ -89,14 +95,29 @@ def add_local_route(subnet_prefix, router_ip):
         else:
             print("[-] Invalid input. Please enter 'y', 'n', or 'h'.")
 
-    print(f"\n[*] Configuring static routing rule on your Mac...")
+    print(f"\n[*] Configuring static routing rule on your {os_name}...")
     print(f"    Subnet: {subnet} -> Gateway: {router_ip}")
-    print("[!] Admin password may be prompted by 'sudo' to update macOS routing tables.")
+    print("[!] Admin password may be prompted by 'sudo' to update routing tables.")
     
+    # Verify sudo password upfront
+    while True:
+        res = subprocess.run(["sudo", "-v"])
+        if res.returncode == 0:
+            break
+        else:
+            print("[-] wrong password. Please try again.")
+
     # Check if a route already exists and delete it first to prevent duplicates
-    subprocess.run(["sudo", "route", "-n", "delete", subnet], capture_output=True)
+    if is_mac:
+        subprocess.run(["sudo", "route", "-n", "delete", "-net", subnet], capture_output=True)
+        cmd = ["sudo", "route", "-n", "add", "-net", subnet, router_ip]
+    elif is_linux:
+        subprocess.run(["sudo", "ip", "route", "del", subnet], capture_output=True)
+        cmd = ["sudo", "ip", "route", "add", subnet, "via", router_ip]
+    else:
+        print(f"[-] Unsupported OS '{sys.platform}' for automatic routing. Please configure manually.")
+        return
     
-    cmd = ["sudo", "route", "-n", "add", subnet, router_ip]
     res = subprocess.run(cmd)
     if res.returncode == 0:
         if subnet not in ADDED_ROUTES:
@@ -104,17 +125,27 @@ def add_local_route(subnet_prefix, router_ip):
         print(f"[+] Local route added successfully: {subnet} -> {router_ip}")
     else:
         print("[-] Failed to configure local static route. You can configure it manually using:")
-        print(f"    sudo route -n add {subnet} {router_ip}")
+        print(f"    {route_cmd_example}")
 
 def remove_local_routes():
     """Clean up all the local computer static routes."""
     global ADDED_ROUTES
+    is_mac = sys.platform == 'darwin'
+    is_linux = sys.platform.startswith('linux')
+    os_name = "Mac" if is_mac else ("Linux" if is_linux else "machine")
+
     for subnet in ADDED_ROUTES:
-        print(f"[*] Restoring your Mac's routing table (deleting {subnet})...")
-        cmd = ["sudo", "route", "-n", "delete", subnet]
+        print(f"[*] Restoring your {os_name}'s routing table (deleting {subnet})...")
+        if is_mac:
+            cmd = ["sudo", "route", "-n", "delete", "-net", subnet]
+        elif is_linux:
+            cmd = ["sudo", "ip", "route", "del", subnet]
+        else:
+            continue
+            
         res = subprocess.run(cmd, capture_output=True)
         if res.returncode == 0:
-            print(f"[+] Mac routing table restored successfully for {subnet}.")
+            print(f"[+] {os_name} routing table restored successfully for {subnet}.")
     ADDED_ROUTES = []
 
 def clean_routerboard_rules():
@@ -279,38 +310,38 @@ def main():
     
     channel_idx = 1
     while True:
-        # Default destination port for first channel is 80; otherwise increments from previous
-        default_dest = 80 if channel_idx == 1 else port_configs[-1]['target_port'] + 1
+        default_dest = 80 if channel_idx == 1 else 'q'
         
         target_port_str = input(f"\n[Channel #{channel_idx}] Enter destination port (default: {default_dest}, or 'q' to finish): ").strip().lower()
+        
+        if not target_port_str:
+            target_port_str = str(default_dest)
+
         if target_port_str in ['q', 'quit']:
             if not port_configs:
                 print("[-] You must configure at least one channel to start proxy.")
                 continue
             break
             
-        if not target_port_str:
-            if channel_idx == 1:
-                target_port = default_dest
-            else:
-                # Hitting Enter on Channel #2+ defaults to finish (quit)
-                break
-        else:
-            try:
-                target_port = int(target_port_str)
-                if not (0 < target_port <= 65535):
-                    print("[-] Invalid range. Enter a valid port (1-65535).")
-                    continue
-            except ValueError:
-                print("[-] Please enter a valid integer or 'q' to finish.")
+        try:
+            target_port = int(target_port_str)
+            if not (0 < target_port <= 65535):
+                print("[-] Invalid range. Enter a valid port (1-65535).")
                 continue
+        except ValueError:
+            print("[-] Please enter a valid integer or 'q' to finish.")
+            continue
                 
         # Ask for corresponding proxy entry port (default destination + 1000)
         default_proxy = target_port + 1000
+        abort_channel = False
         while True:
-            forwarded_port_str = input(f"[Channel #{channel_idx}] Enter proxy entry port (default: {default_proxy}): ").strip()
+            forwarded_port_str = input(f"[Channel #{channel_idx}] Enter proxy entry port (default: {default_proxy}, or 'q' to finish): ").strip().lower()
             if not forwarded_port_str:
                 forwarded_port = default_proxy
+                break
+            if forwarded_port_str in ['q', 'quit']:
+                abort_channel = True
                 break
             try:
                 forwarded_port = int(forwarded_port_str)
@@ -318,8 +349,14 @@ def main():
                     break
                 print("[-] Invalid range. Enter a valid port (1-65535).")
             except ValueError:
-                print("[-] Please enter a valid integer.")
+                print("[-] Please enter a valid integer or 'q' to finish.")
                 
+        if abort_channel:
+            if not port_configs:
+                print("[-] You must configure at least one channel to start proxy.")
+                continue
+            break
+
         port_configs.append({
             'target_port': target_port,
             'forwarded_port': forwarded_port
@@ -432,14 +469,22 @@ def main():
         while True:
             # Monitor wireless link status periodically
             try:
-                reg_table = run_ssh_cmd("/interface wireless registration-table print")
+                reg_table = run_ssh_cmd("/interface wireless registration-table print; /interface monitor-traffic wlan1 once")
                 if selected_net['mac'].lower() in reg_table.lower():
                     # Extract active signal strength
                     sig_match = re.search(r"-\d+dBm", reg_table)
                     sig_str = sig_match.group(0) if sig_match else "connected"
-                    print(f"[{time.strftime('%H:%M:%S')}] Link Status: Active | Signal: {sig_str}", end="\r")
+                    
+                    # Extract Tx/Rx rates
+                    tx_match = re.search(r"tx-bits-per-second:\s*([0-9\.]+[a-zA-Z]+)", reg_table)
+                    rx_match = re.search(r"rx-bits-per-second:\s*([0-9\.]+[a-zA-Z]+)", reg_table)
+                    tx_str = tx_match.group(1) if tx_match else "0bps"
+                    rx_str = rx_match.group(1) if rx_match else "0bps"
+                    
+                    status_line = f"[{time.strftime('%H:%M:%S')}] Link: Active | Signal: {sig_str} | Tx: {tx_str} | Rx: {rx_str}"
+                    print(f"{status_line:<75}", end="\r")
                 else:
-                    print(f"[{time.strftime('%H:%M:%S')}] Link Status: Connecting / Searching...", end="\r")
+                    print(f"[{time.strftime('%H:%M:%S')}] Link Status: Connecting / Searching...{' ':20}", end="\r")
             except Exception:
                 pass
             time.sleep(2)
