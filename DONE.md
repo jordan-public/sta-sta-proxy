@@ -334,3 +334,26 @@ To streamline installation on new or factory-reset devices, we have implemented 
    - Sets the system identity to `"proxy-gateway"` for clear identification
    - By running this atomically, **zero connection control is lost** over the RouterBOARD while it executes its interface reconfigurations locally!
 3. **Automated IP Discovery Sweep**: After prompting the user to move the RouterBOARD's cable directly into their home LAN, the script triggers a background multi-host ping sweep on local subnet candidate ranges, logs into matching hosts, verifies the system identity is `"proxy-gateway"`, and automatically updates the local `.env` file with the newly assigned dynamic IP!
+
+
+---
+
+## 9. Architectural Feasibility Analysis: Dual-STA Wireless Relay (Completely Cable-Free)
+
+We conducted a deep architectural evaluation to explore if the RouterBOARD can connect to two wireless networks simultaneously as a Station (STA) client, eliminating the physical Ethernet cable to your Home LAN.
+
+### The Constraints:
+1. **Single Physical Radio (wlan1)**: The MikroTik RB711 series contains a single physical 2.4 GHz wireless radio chip. A single radio can only tune to one frequency/channel at any given microsecond.
+2. **Channel Conflicts**: Your Home Wi-Fi and the Target IoT Access Point (Rover Tank / Tasmota) typically run on different, non-overlapping channels (e.g., Channel 6 vs. Channel 1).
+3. **Virtual Interfaces Constraint**: While RouterOS allows creating Virtual Clients or Virtual APs on top of `wlan1`, **all virtual interfaces must operate on the exact same channel/frequency as the master physical interface**. If `wlan1` hops channels to connect to a target device, the virtual client instantly drops its connection to your Home Wi-Fi, resulting in constant link flapping.
+
+### Engineering Solutions:
+* **Option A: USB Wireless Adapter (Best Solution)**:
+  * Models like the **RB711UA-2HnD** equipped with a USB 2.0 port can accept a compatible Atheros-based USB Wi-Fi dongle.
+  * RouterOS registers this as **`wlan2`**, providing two independent physical radios.
+  * `wlan1` remains connected to your Home Wi-Fi, while `wlan2` hops and connects to target smart device APs.
+* **Option B: Dual-Band Upgrade**:
+  * Upgrading the hardware to a dual-radio MikroTik (e.g., **hAP ac lite** or **hAP ax²**).
+  * Use the 5 GHz radio as a client to your Home Wi-Fi, and dedicate the 2.4 GHz radio entirely to scanning and connecting to standalone IoT AP devices.
+* **Option C: Wired + Wireless STA Relay (Current Certified Standard)**:
+  * Retain the current design: physical Ethernet `ether1` provides a 100% reliable, zero-latency management backhaul, while `wlan1` is entirely dedicated to connecting to experimental wireless APs.

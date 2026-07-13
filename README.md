@@ -259,3 +259,22 @@ ROUTER_IP=192.168.2.199
    [+] Exited cleanly. Goodbye!
    ```
 
+
+
+---
+
+## Future Work: Dual-STA Wireless Relay (Completely Cable-Free)
+
+We analyzed the possibility of operating the RouterBOARD as a **fully wireless dual-STA gateway** to eliminate the physical Ethernet cable to your Home LAN entirely. Here is how this can be implemented in future phases:
+
+### Hardware Constraints
+* A single physical radio chip (like the built-in `wlan1` on the RB711) can only tune to one wireless channel at a time.
+* If your Home Wi-Fi (e.g. Channel 6) and the Target IoT device AP (e.g. Channel 1) operate on different channels, using virtual client interfaces on a single radio causes extreme link flapping.
+
+### Suggested Deployment Roads
+1. **USB Dual-Radio Expansion (Best Path)**:
+   - On USB-equipped Routerboards (like the **RB711UA-2HnD**), users can plug in an external USB wireless dongle.
+   - RouterOS registers this as **`wlan2`**, allowing one radio to lock onto your Home Wi-Fi while the other dynamically scans and connects to standalone smart devices on separate channels.
+2. **Dual-Band/Dual-Radio Hardware**:
+   - Upgrading the gateway device to a dual-radio system (e.g., **hAP ac lite** or **hAP ax²**).
+   - The 5 GHz radio acts as a client to your Home Wi-Fi for management and internet, while the 2.4 GHz radio remains dedicated to scanning and proxying the IoT smart devices.
