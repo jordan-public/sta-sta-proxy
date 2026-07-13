@@ -129,22 +129,34 @@ def main():
             
     print(f"\n[+] Selected AP SSID: {ssid_to_use} ({selected_net['mac']})")
     
-    # 3. Configure Port Forwarding Offset
+    # 3. Configure Port Forwarding
     while True:
-        port_offset_str = input("Enter port forwarding offset (default: 1000): ").strip()
-        if not port_offset_str:
-            port_offset = 1000
+        target_port_str = input("Enter destination port (default: 80): ").strip()
+        if not target_port_str:
+            target_port = 80
             break
         try:
-            port_offset = int(port_offset_str)
-            if 0 < port_offset < 60000:
+            target_port = int(target_port_str)
+            if 0 < target_port <= 65535:
                 break
-            print("[-] Invalid range. Enter a valid port offset.")
+            print("[-] Invalid range. Enter a valid port (1-65535).")
         except ValueError:
             print("[-] Please enter a valid integer.")
-            
-    target_port = 80
-    forwarded_port = target_port + port_offset
+
+    default_proxy_port = target_port + 1000
+    while True:
+        forwarded_port_str = input(f"Enter proxy port (default: {default_proxy_port}): ").strip()
+        if not forwarded_port_str:
+            forwarded_port = default_proxy_port
+            break
+        try:
+            forwarded_port = int(forwarded_port_str)
+            if 0 < forwarded_port <= 65535:
+                break
+            print("[-] Invalid range. Enter a valid port (1-65535).")
+        except ValueError:
+            print("[-] Please enter a valid integer.")
+
     target_ap_ip = "192.168.4.1" # Standard default for Tasmota, Rover Tank, etc.
     
     # Prompt for Target AP IP overrides
@@ -176,8 +188,8 @@ def main():
         run_ssh_cmd(f"/ip address add address={static_client_ip}/24 interface=wlan1")
         
         # Configure NAT Port Forwarding Rules
-        print(f"[*] Creating dstnat port-forwarding rule (port {forwarded_port} -> {target_ap_ip}:80)...")
-        run_ssh_cmd(f"/ip firewall nat add chain=dstnat dst-port={forwarded_port} protocol=tcp action=dst-nat to-addresses={target_ap_ip} to-ports=80 comment=\"sta-proxy-forward\"")
+        print(f"[*] Creating dstnat port-forwarding rule (port {forwarded_port} -> {target_ap_ip}:{target_port})...")
+        run_ssh_cmd(f"/ip firewall nat add chain=dstnat dst-port={forwarded_port} protocol=tcp action=dst-nat to-addresses={target_ap_ip} to-ports={target_port} comment=\"sta-proxy-forward\"")
         run_ssh_cmd(f"/ip firewall nat add chain=srcnat out-interface=wlan1 action=masquerade comment=\"sta-proxy-masquerade\"")
         
     except Exception as e:

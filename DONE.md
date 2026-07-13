@@ -306,7 +306,7 @@ To fully automate the workflow of discovering IoT access points and configuring 
 
 ### Implemented Mechanics inside the Script:
 1. **SSID Scan Discovery**: Executes `/interface wireless scan wlan1 duration=4s` on the RouterBOARD and parses the raw tabular output to extract SSID names, MAC addresses, and Signal levels (in dBm).
-2. **Interactive UI**: Prompts the user to select an AP and enter a custom port translation offset (mapping port 80 to `<80 + offset>`).
+2. **Interactive UI**: Prompts the user to select an AP, input a target destination port (default: 80), select a custom proxy entry port (default: destination_port + 1000), and optionally override the target AP gateway IP (default: 192.168.4.1).
 3. **Automated Static Route Binding**: Calculates the target device's subnet and dynamically configures a static local IP on `wlan1` (e.g. `192.168.4.10/24` for Tasmota networks).
 4. **NAT Destination Injection**: Injects Destination NAT (dstnat) port forwarding and Source NAT (srcnat masquerading) comments:
    * Comment `"sta-proxy-forward"` is used for easy identification.

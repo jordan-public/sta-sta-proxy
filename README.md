@@ -151,11 +151,13 @@ The utility communicates directly with the RouterBOARD over SSH to orchestrate a
    Select target network (1-3): 1
    ```
 
-3. **Configure Offset and Gateway Subnet**:
-   - **Port Offset**: Enter an offset to map the remote device's port 80. The default is `1000` (which hosts the proxy at `http://192.168.2.199:1080`). Entering `2000` will host it at `12080`, etc.
-   - **Gateway IP**: Choose the default AP gateway address of the target smart device (default: `192.168.4.1`, matching standard Tasmota / Rover Tank AP configs).
+3. **Configure Ports and Gateway Subnet**:
+   - **Destination Port**: Enter the port of the target smart device (default: `80` in brackets).
+   - **Proxy Port**: Enter the entrance port of the proxy on the RouterBOARD (default: `<destination_port + 1000>` in brackets).
+   - **Gateway IP**: Choose the default AP gateway address of the target smart device (default: `192.168.4.1`).
    ```text
-   Enter port forwarding offset (default: 1000): 
+   Enter destination port (default: 80): 
+   Enter proxy port (default: 1080): 
    Enter target AP gateway IP (default: 192.168.4.1): 
    ```
 
