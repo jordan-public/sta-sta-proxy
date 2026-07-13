@@ -17,9 +17,9 @@ def save_dotenv(router_ip):
     try:
         with open(env_path, "w") as f:
             f.write(f"# Local Environment Configurations\nROUTER_IP={router_ip}\n")
-        print(f"[+] Successfully saved ROUTER_IP={router_ip} to local .env configuration file!")
+        print(f"\n[+] Successfully saved ROUTER_IP={router_ip} to local .env configuration file!")
     except Exception as e:
-        print(f"[-] Warning: Could not write to .env file: {e}")
+        print(f"\n[-] Warning: Could not write to .env file: {e}")
 
 def ping_ip(ip):
     """Quietly ping a single IP address (timeout 1s)."""
@@ -77,25 +77,32 @@ def main():
         print("\n\n[!] Configuration aborted by user. Exiting.")
         sys.exit(0)
 
-    # Step 1: Resilient Reachability Loop
+    # Step 1: Resilient Reachability Loop with moving dots
     default_ip = "192.168.88.1"
     print(f"\n[*] Step 1: Checking reachability to factory-reset RouterBOARD at {default_ip}...")
+    
+    dots_cycle = [".  ", " . ", "  ."]
+    cycle_idx = 0
     
     try:
         while True:
             res = subprocess.run(["ping", "-c", "1", "-t", "1", default_ip], capture_output=True)
             if res.returncode == 0:
-                print(f"\n[+] Success! Factory-reset RouterBOARD detected and responding on {default_ip}!")
+                # Clear line and print success
+                print(f"\r[+] Success! Factory-reset RouterBOARD detected and responding on {default_ip}!      ")
                 break
             
-            print(f"\r[!] RouterBOARD ({default_ip}) is not reachable yet. Checking connection... (Press Ctrl+C to abort)", end="", flush=True)
-            time.sleep(2)
+            # Print moving dots on same line
+            current_dots = dots_cycle[cycle_idx]
+            print(f"\r[{current_dots}] Checking connection to RouterBOARD ({default_ip})... (Press Ctrl+C to abort)", end="", flush=True)
+            cycle_idx = (cycle_idx + 1) % len(dots_cycle)
+            time.sleep(1)
     except KeyboardInterrupt:
         print("\n\n[!] Configuration aborted by user. Exiting.")
         sys.exit(0)
 
     # Step 2: Apply Transactional L3 Configuration Block
-    print("\n\n[*] Step 2: Deploying transactional configuration block via SSH...")
+    print("\n[*] Step 2: Deploying transactional configuration block via SSH...")
     print("    This procedure combines all steps into a single atomic instruction, ensuring")
     print("    the RouterBOARD completely configures itself without losing control during execution.")
 
@@ -154,10 +161,15 @@ def main():
     print("    Scanning active hosts on your subnet. Please be patient... (Press Ctrl+C to abort)")
 
     discovered_ip = None
+    attempt = 1
+    cycle_idx = 0
+    
     try:
-        attempt = 1
         while True:
-            print(f"\r    - Subnet discovery scan #{attempt}... Checking active network devices... ", end="", flush=True)
+            current_dots = dots_cycle[cycle_idx]
+            print(f"\r[{current_dots}] Scan #{attempt}... Searching for proxy-gateway on your network... ", end="", flush=True)
+            cycle_idx = (cycle_idx + 1) % len(dots_cycle)
+            
             active_ips = scan_local_subnet()
             
             # Check candidate IPs for proxy-gateway identity
@@ -180,8 +192,8 @@ def main():
                 
             print(f"\n    [!] RouterBOARD not discovered yet. Ensure the Ethernet cable is securely plugged")
             print("        into your home router/switch and that the RouterBOARD LAN LED is on.")
-            print("        Retrying in 5 seconds... (Press Ctrl+C to abort)")
-            time.sleep(5)
+            print("        Retrying... (Press Ctrl+C to abort)")
+            time.sleep(2)
             attempt += 1
             
     except KeyboardInterrupt:
