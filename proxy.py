@@ -292,6 +292,9 @@ def discover_routerboards():
         except Exception:
             pass
 
+    # Compile local IPs to ignore loopback/reflections
+    ignored_ips = set(inet_ips + ["127.0.0.1", "0.0.0.0"]) if "inet_ips" in locals() else {"127.0.0.1", "0.0.0.0"}
+
     # Collect MNDP responses
     try:
         while True:
@@ -299,6 +302,8 @@ def discover_routerboards():
             if len(data) < 4:
                 continue
             ip = addr[0]
+            if ip in ignored_ips:
+                continue
             if ip in discovered:
                 continue
 
