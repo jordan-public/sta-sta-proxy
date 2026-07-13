@@ -1,4 +1,4 @@
-# sta-sta-proxy: Seamless IoT & Device Control Gateway
+# STA-STA-Proxy: Seamless IoT & Device Control Gateway
 
 This project configures a **MikroTik RouterBOARD (RB711UA-2HnD)** to act as a wireless Station (STA) that connects to smart devices/appliances operating in Access Point (AP) mode (such as Tasmota plugs, Rover Tanks, or other IoT configuration portals). 
 
